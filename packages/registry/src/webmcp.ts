@@ -15,9 +15,10 @@
  *    only way to remove a tool, and aborting does not disturb a call already running.
  *  - Registering a name that is already registered *rejects*; it does not replace. So a
  *    changed definition has to be aborted first.
- *  - `execute` receives `(input, { signal })` and nothing else. There is no client
- *    object and no confirmation API, which is why human-in-the-loop here is a promise
- *    this page resolves on a real click.
+ *  - The spec gives `execute` a second parameter carrying an `AbortSignal`. Chrome 151
+ *    does not pass it, so this file supplies its own per-call controller. There is no
+ *    client object and no confirmation API in any shipping build, which is why
+ *    human-in-the-loop here is a promise the page resolves on a real click.
  *  - Only two annotations exist: `readOnlyHint` and `untrustedContentHint`.
  */
 
@@ -37,7 +38,12 @@ interface WebMcpToolDefinition {
   description: string;
   inputSchema: Record<string, unknown>;
   annotations?: WebMcpAnnotations;
-  execute: (input: Record<string, unknown>, options: { signal: AbortSignal }) => Promise<unknown>;
+  /**
+   * The spec defines a second parameter carrying an `AbortSignal`. Chrome 151 does not
+   * pass it — verified against the shipping build, where `execute` receives exactly one
+   * argument — so it is optional here and every call site treats it as absent.
+   */
+  execute: (input: Record<string, unknown>, options?: { signal?: AbortSignal }) => Promise<unknown>;
 }
 
 interface WebMcpRegisterOptions {
@@ -120,6 +126,8 @@ interface LiveTool {
  */
 export class WebMcpBinding {
   private readonly live = new Map<string, LiveTool>();
+  /** Controllers for calls currently running, keyed by tool name. */
+  private readonly pending = new Map<string, AbortController>();
   private readonly actions: ActionDefinition<never, unknown>[];
   private readonly options: BindingOptions;
   private disposed = false;
@@ -171,6 +179,7 @@ export class WebMcpBinding {
     action: ActionDefinition<never, unknown>,
     fingerprint: string,
     context: ModelContext,
+    attempt = 0,
   ): Promise<void> {
     const controller = new AbortController();
     const annotations: WebMcpAnnotations = {};
@@ -180,27 +189,37 @@ export class WebMcpBinding {
     const registerOptions: WebMcpRegisterOptions = { signal: controller.signal };
     if (this.options.exposedTo) registerOptions.exposedTo = this.options.exposedTo;
 
+    const definition: WebMcpToolDefinition = {
+      name: action.id,
+      description: action.description,
+      inputSchema: action.inputSchema,
+      annotations,
+      // Chrome 151 omits the options argument, so the signal is read defensively and a
+      // per-call controller is used when the browser does not supply one.
+      execute: (input, options) => this.invoke(action, input, options?.signal),
+    };
+
     try {
       // The literal call. Everything above exists to decide *when* this runs and with
       // *what*; this is the whole of the integration with the browser.
-      await document.modelContext!.registerTool(
-        {
-          name: action.id,
-          description: action.description,
-          inputSchema: action.inputSchema,
-          annotations,
-          execute: (input, options) => this.invoke(action, input, options.signal),
-        },
-        registerOptions,
-      );
+      await document.modelContext!.registerTool(definition, registerOptions);
       this.live.set(action.id, { controller, fingerprint });
     } catch (error) {
+      const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+
+      // React StrictMode mounts, cleans up and mounts again, and an abort from the first
+      // pass can land after the second pass has already tried to register. The browser
+      // rejects a duplicate name outright rather than replacing it, so the fix is to
+      // wait for the abort to settle and try again rather than to give up.
+      if (/InvalidStateError|Duplicate tool name/i.test(message) && attempt < 5) {
+        await delay(30 * (attempt + 1));
+        controller.abort();
+        if (!this.disposed) await this.registerOne(action, fingerprint, context, attempt + 1);
+        return;
+      }
+
       controller.abort();
-      this.options.onEvent?.({
-        toolName: action.id,
-        phase: 'error',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      this.options.onEvent?.({ toolName: action.id, phase: 'error', message });
     }
   }
 
@@ -215,13 +234,23 @@ export class WebMcpBinding {
   private async invoke(
     action: ActionDefinition<never, unknown>,
     input: Record<string, unknown>,
-    signal: AbortSignal,
+    signal: AbortSignal | undefined,
   ): Promise<unknown> {
     const started = Date.now();
     this.options.onEvent?.({ toolName: action.id, phase: 'start' });
 
+    // Chrome 151 supplies no signal, so one is created per call. It gives the page a
+    // way to cancel a tool that is waiting on a human, which matters because the
+    // browser does not tell the page when the agent walks away from a pending call.
+    const local = new AbortController();
+    if (signal) {
+      if (signal.aborted) local.abort();
+      else signal.addEventListener('abort', () => local.abort(), { once: true });
+    }
+    this.pending.set(action.id, local);
+
     try {
-      const context = this.options.makeContext(signal);
+      const context = this.options.makeContext(local.signal);
       const result = await action.run(input as never, context);
       const bounded = boundResult(
         result,
@@ -244,14 +273,43 @@ export class WebMcpBinding {
         message,
         hint: 'This is a bug in the page, not in the request. Report what you were trying to do.',
       };
+    } finally {
+      if (this.pending.get(action.id) === local) this.pending.delete(action.id);
     }
+  }
+
+  /**
+   * Cancels a tool call that is still running.
+   *
+   * Needed because of a real gap in Chrome 151: when an agent abandons a call, the
+   * agent side rejects with an AbortError but the page is never told, so a confirmation
+   * card would sit on screen forever waiting for a click that no longer means anything.
+   * The page wires its own Cancel button to this.
+   */
+  cancel(toolName: string): boolean {
+    const controller = this.pending.get(toolName);
+    if (!controller) return false;
+    controller.abort();
+    this.pending.delete(toolName);
+    return true;
+  }
+
+  /** Tool calls currently in flight, so the page can show what the agent is doing. */
+  get inFlight(): string[] {
+    return [...this.pending.keys()];
   }
 
   dispose(): void {
     this.disposed = true;
+    for (const controller of this.pending.values()) controller.abort();
+    this.pending.clear();
     for (const tool of this.live.values()) tool.controller.abort();
     this.live.clear();
   }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /** Only the parts of a definition the browser actually sees. */
