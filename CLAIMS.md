@@ -86,6 +86,7 @@ Measurements below were taken on Windows 11, Node 24.13.0, Chrome 151.0.7922.174
 | When an agent abandons a call the page is not notified | MEASURED | agent side rejects with `AbortError`, page keeps waiting — hence the Cancel on every card |
 | Chrome 151 aborts a running `execute` when that tool's registration is aborted | MEASURED | found because `solve_roster` unregisters itself while solving; the binding defers any sync while a call is in flight |
 | 34/34 browser assertions and 55/55 eval steps pass against the built app | REPRODUCIBLE | `pnpm test:webmcp` and `pnpm evals` |
+| Stock Chrome 149+ needs **no flags** on the deployed site | MEASURED | an origin-trial token is served in the page; verified by driving Chrome 151 with no switches at all — `document.modelContext` is an object, six tools, 3 read / 3 write |
 | **NOT CLAIMED:** that this works in every browser | NOT CLAIMED | Two runtimes consume WebMCP today: the ChatGPT desktop app's built-in browser, and Chromium with the flag. Elsewhere the page is an ordinary, fully working web app with no tool surface, and `/tools` says so. |
 
 ## The evals

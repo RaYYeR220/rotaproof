@@ -244,10 +244,15 @@ Then open it in a browser that speaks WebMCP:
 
 - **ChatGPT desktop app** — its built-in browser supports WebMCP natively. Nothing to enable.
 - **Chrome 149+** — `chrome://flags/#enable-webmcp-testing`, or launch with
-  `--enable-features=WebMCPTesting --enable-blink-features=WebMCP`.
+  `--enable-features=WebMCP --enable-blink-features=WebMCP`.
 
-Without either, the page works completely as an ordinary web app; the tool surface is simply
-absent and `/tools` says so.
+**On the deployed site none of that is needed.** <https://rotaproof.vercel.app> carries a
+WebMCP origin-trial token, so stock Chrome 149+ with no flags at all reports
+`document.modelContext` as an object and lists all six tools. The token is origin-bound, so
+it covers the stable alias only — a local build still needs the switch.
+
+Wherever WebMCP is unavailable the page works completely as an ordinary web app; the tool
+surface is simply absent and `/tools` says so, with the exact switch to turn it on.
 
 ```bash
 pnpm test              # 190 tests: model, solver, parity, privacy, behaviour

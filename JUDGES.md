@@ -66,9 +66,13 @@ Try, in order:
    click Approve in the page. Click Decline instead and watch it come back `declined` with
    nothing changed.
 
-**Chrome 149+** — launch with
-`--enable-features=WebMCP --enable-blink-features=WebMCP`, or enable
-`chrome://flags/#enable-webmcp-testing`.
+**Any Chrome 149+** — just open the link. The deployed site carries a WebMCP origin-trial
+token, so there are no flags to set. Verified on stock Chrome 151 with no switches:
+`document.modelContext` is an object and reports six tools, three read and three write.
+
+If you are running the app locally instead, the token does not apply — origin-trial tokens
+are bound to an origin — so launch Chrome with
+`--enable-features=WebMCP --enable-blink-features=WebMCP`.
 
 ## 5. Checking the claims
 
