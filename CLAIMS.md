@@ -63,7 +63,8 @@ Measurements below were taken on Windows 11, Node 24.13.0, Chrome 151.0.7922.174
 | A capability that exists for humans but not agents fails the build unless a reason is written | REPRODUCIBLE | `packages/registry/test/parity.test.ts` |
 | Exactly three capabilities are withheld, each with a stated reason | REPRODUCIBLE | same test asserts the list by name |
 | Tools register and unregister with page state; `explain_conflict` exists only while infeasible, `publish_roster` only when there is a clean solved week | REPRODUCIBLE | `packages/registry/test/actions.test.ts` → "the tool surface follows the state" |
-| `readOnlyHint` is set on reads and never on writes; the read/write split is asserted by name | REPRODUCIBLE | `parity.test.ts` |
+| `readOnlyHint` is written explicitly on every tool, and the read/write split is asserted by name | REPRODUCIBLE | `parity.test.ts` |
+| Omitting `readOnlyHint` on writes makes ChatGPT display them as neither read nor write | MEASURED | observed in the ChatGPT desktop app on GPT-5.6 Terra: a six-tool surface read "3 read, 0 write tools" until the hint was written explicitly |
 | Tool names, description budgets and parameter-description budgets conform to Chrome's guidance, with two named exceptions | REPRODUCIBLE | `parity.test.ts`; the exceptions are `set_constraint` and `solve_roster` and the reason is in the test |
 | Failures return a named error plus a hint naming valid values | REPRODUCIBLE | `actions.test.ts` → "argument validation guides rather than blocks" |
 | `publish_roster` blocks until a person clicks, and returns `declined` if they refuse | REPRODUCIBLE | `actions.test.ts` → "publishing waits for a person" |
@@ -78,6 +79,7 @@ Measurements below were taken on Windows 11, Node 24.13.0, Chrome 151.0.7922.174
 
 | claim | tier | evidence |
 |---|---|---|
+| The app works end to end in the ChatGPT desktop app's built-in browser on GPT-5.6 Terra, free tier | MEASURED | the agent listed the site tools, called `solve_roster`, and reported 42 assignments at objective 28.42 in 428 ms |
 | The live page registers its tools and they are callable in Chrome 151 with WebMCP enabled | REPRODUCIBLE | `pnpm test:webmcp` — drives real Chrome, asserts headers, `getTools()`, execution, dynamic registration, and a real click through the confirmation card |
 | `Origin-Agent-Cluster: ?1` and `Permissions-Policy: tools=(self)` are served | REPRODUCIBLE | asserted by the same harness against the deployed URL |
 | Chrome 151 calls `execute()` with one argument, so the spec's `AbortSignal` is absent | MEASURED | probed directly; the binding supplies its own controller and reads `options?.signal` so it starts working when the browser ships it |

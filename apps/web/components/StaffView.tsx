@@ -11,7 +11,7 @@
 
 import { useState } from 'react';
 
-import { type Schedule, shiftById, staffById } from '@rotaproof/core';
+import { type RosterModel, type Schedule, dateOf, shiftById, staffById } from '@rotaproof/core';
 import {
   type ActionDefinition,
   acceptSwap,
@@ -23,6 +23,13 @@ import {
 } from '@rotaproof/registry';
 
 import { runAction, useWebStore } from '@/lib/store';
+
+const WEEKDAY = new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'UTC' });
+
+/** "Friday" rather than "day 4" — the person reading this thinks in weekdays. */
+function dayName(model: RosterModel, day: number): string {
+  return WEEKDAY.format(new Date(`${dateOf(model.horizon, day)}T00:00:00Z`));
+}
 
 export default function StaffView() {
   const session = useWebStore((state) => state.session);
@@ -58,86 +65,100 @@ export default function StaffView() {
 
   return (
     <div>
-      <h1 className="text-lg font-semibold">Staff</h1>
+      {/* ── who is at the counter ────────────────────────────────────────── */}
+      <section aria-labelledby="staff-heading" className="band">
+        <div className="mod-head">
+          <h1 id="staff-heading">Staff</h1>
+          <p className="count-tag">week of {model.horizon.startDate}</p>
+        </div>
 
-      <section aria-labelledby="who-heading" className="mt-4">
-        <h2 id="who-heading" className="text-xs font-semibold uppercase tracking-wide">
-          Who are you?
-        </h2>
-
-        <p className="mt-1">
-          <label htmlFor="actor-picker">Signed in as</label>{' '}
-          <select
-            id="actor-picker"
-            className="border px-2 py-1"
-            value={actorId ?? ''}
-            disabled={!hydrated}
-            onChange={(event) => signInAs(event.target.value || undefined)}
-          >
-            <option value="">Nobody</option>
-            {model.staff.map((person) => (
-              <option key={person.id} value={person.id}>
-                {person.id} · {person.name}
-              </option>
-            ))}
-          </select>
-        </p>
+        <div className="fieldrow">
+          <p className="field">
+            <label htmlFor="actor-picker">Signed in as</label>
+            <select
+              id="actor-picker"
+              className="control"
+              value={actorId ?? ''}
+              disabled={!hydrated}
+              onChange={(event) => signInAs(event.target.value || undefined)}
+            >
+              <option value="">Nobody</option>
+              {model.staff.map((person) => (
+                <option key={person.id} value={person.id}>
+                  {person.id} · {person.name}
+                </option>
+              ))}
+            </select>
+          </p>
+        </div>
       </section>
 
-      <section aria-labelledby="shifts-heading" className="mt-6">
-        <h2 id="shifts-heading" className="text-xs font-semibold uppercase tracking-wide">
-          My shifts {published ? `(published version ${published.version})` : '(unpublished draft)'}
-        </h2>
+      {/* ── my shifts ────────────────────────────────────────────────────── */}
+      <section aria-labelledby="shifts-heading" className="mod">
+        <div className="mod-head">
+          <h2 id="shifts-heading">My shifts</h2>
+          <p className="count-tag">
+            {published ? `published version ${published.version}` : 'unpublished draft'}
+          </p>
+        </div>
 
-        <ul id="my-shifts" className="mt-2">
+        <ul id="my-shifts" className="stack">
           {!actorId ? (
-            <li>Pick who you are to see your shifts.</li>
+            <li className="empty-note">Pick who you are to see your shifts.</li>
           ) : mine.length === 0 ? (
-            <li>Nothing rostered for you this week.</li>
+            <li className="empty-note">Nothing rostered for you this week.</li>
           ) : (
             mine
               .slice()
               .sort((a, b) => a.day - b.day)
               .map((assignment) => (
-                <li key={`${assignment.day}:${assignment.shift}`} data-day={assignment.day}>
-                  day {assignment.day} · {shiftById(model, assignment.shift)?.label ?? assignment.shift}
+                <li
+                  key={`${assignment.day}:${assignment.shift}`}
+                  data-day={assignment.day}
+                  className="row"
+                >
+                  <span className="grow">
+                    {dayName(model, assignment.day)} ·{' '}
+                    {shiftById(model, assignment.shift)?.label ?? assignment.shift}
+                  </span>
+                  <span className="mono push">day {assignment.day}</span>
                 </li>
               ))
           )}
         </ul>
       </section>
 
-      <section aria-labelledby="ask-heading" className="mt-6">
-        <h2 id="ask-heading" className="text-xs font-semibold uppercase tracking-wide">
-          Ask about a shift
-        </h2>
+      {/* ── ask about a shift ────────────────────────────────────────────── */}
+      <section aria-labelledby="ask-heading" className="mod">
+        <div className="mod-head">
+          <h2 id="ask-heading">Ask about a shift</h2>
+          <p className="mod-note">
+            Every answer here is a fresh solve, so a yes is a proof rather than a guess.
+          </p>
+        </div>
 
-        <div className="mt-2 flex flex-wrap items-end gap-2">
-          <p>
-            <label htmlFor="pick-day" className="block">
-              Day
-            </label>
+        <div className="fieldrow">
+          <p className="field">
+            <label htmlFor="pick-day">Day</label>
             <select
               id="pick-day"
-              className="border px-2 py-1"
+              className="control"
               value={day}
               onChange={(event) => setDay(Number(event.target.value))}
             >
               {Array.from({ length: model.horizon.days }, (_, index) => (
                 <option key={index} value={index}>
-                  day {index}
+                  {dayName(model, index)} · day {index}
                 </option>
               ))}
             </select>
           </p>
 
-          <p>
-            <label htmlFor="pick-shift" className="block">
-              Shift
-            </label>
+          <p className="field">
+            <label htmlFor="pick-shift">Shift</label>
             <select
               id="pick-shift"
-              className="border px-2 py-1"
+              className="control"
               value={shift}
               onChange={(event) => setShift(event.target.value)}
             >
@@ -149,24 +170,22 @@ export default function StaffView() {
             </select>
           </p>
 
-          <p className="grow">
-            <label htmlFor="pick-note" className="block">
-              Note for the manager (optional)
-            </label>
+          <p className="field grow">
+            <label htmlFor="pick-note">Note for the manager (optional)</label>
             <input
               id="pick-note"
               type="text"
-              className="w-full border px-2 py-1"
+              className="control"
               value={note}
               onChange={(event) => setNote(event.target.value)}
             />
           </p>
         </div>
 
-        <div className="mt-2 flex flex-wrap gap-2">
+        <div className="btnrow gap-top">
           <button
             type="button"
-            className="border px-3 py-1"
+            className="btn btn-primary"
             disabled={!actorId || solving || busy !== null}
             onClick={() =>
               dispatch('time-off', requestTimeOff, {
@@ -180,7 +199,7 @@ export default function StaffView() {
 
           <button
             type="button"
-            className="border px-3 py-1"
+            className="btn"
             disabled={!actorId || solving || busy !== null}
             onClick={() => dispatch('find-swap', findSwap, { day, shift })}
           >
@@ -189,7 +208,7 @@ export default function StaffView() {
 
           <button
             type="button"
-            className="border px-3 py-1"
+            className="btn"
             disabled={!actorId || solving || busy !== null}
             onClick={() =>
               dispatch('offer-swap', offerSwap, { day, shift, ...(note ? { note } : {}) })
@@ -200,23 +219,27 @@ export default function StaffView() {
         </div>
       </section>
 
-      <section aria-labelledby="swaps-heading" className="mt-6">
-        <h2 id="swaps-heading" className="text-xs font-semibold uppercase tracking-wide">
-          Open swaps ({openSwaps.length})
-        </h2>
+      {/* ── the swap board ───────────────────────────────────────────────── */}
+      <section aria-labelledby="swaps-heading" className="mod">
+        <div className="mod-head">
+          <h2 id="swaps-heading">Open swaps</h2>
+          <p className="count-tag">{openSwaps.length} offered</p>
+        </div>
 
-        <ul className="mt-2">
+        <ul className="stack">
           {openSwaps.length === 0 ? (
-            <li>Nobody has offered a shift.</li>
+            <li className="empty-note">Nobody has offered a shift.</li>
           ) : (
             openSwaps.map((swap) => (
-              <li key={swap.id} data-swap={swap.id} className="border-b py-1">
-                {swap.from} · day {swap.day}{' '}
-                {shiftById(model, swap.shift)?.label ?? swap.shift}
-                {swap.note ? ` — “${swap.note}”` : ''}{' '}
+              <li key={swap.id} data-swap={swap.id} className="row">
+                <span className="grow">
+                  {swap.from} · {dayName(model, swap.day)}{' '}
+                  {shiftById(model, swap.shift)?.label ?? swap.shift}
+                  {swap.note ? ` — “${swap.note}”` : ''}
+                </span>
                 <button
                   type="button"
-                  className="border px-2"
+                  className="btn btn-sm push"
                   disabled={!actorId || swap.from === actorId || solving || busy !== null}
                   aria-label={`Take day ${swap.day} ${shiftById(model, swap.shift)?.label ?? swap.shift} from ${swap.from}`}
                   onClick={() => dispatch('accept-swap', acceptSwap, { swapId: swap.id })}
@@ -229,41 +252,51 @@ export default function StaffView() {
         </ul>
 
         {openSwaps.length > 0 ? (
-          <button
-            type="button"
-            className="mt-2 border px-3 py-1"
-            disabled={busy !== null}
-            onClick={() => dispatch('list-swaps', listSwaps, {})}
-          >
-            Read the swap board as an agent would
-          </button>
+          <div className="btnrow gap-top">
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={busy !== null}
+              onClick={() => dispatch('list-swaps', listSwaps, {})}
+            >
+              Read the swap board as an agent would
+            </button>
+          </div>
         ) : null}
       </section>
 
-      <section aria-labelledby="staff-output-heading" className="mt-6">
-        <h2 id="staff-output-heading" className="text-xs font-semibold uppercase tracking-wide">
-          Last action result
-        </h2>
-        <p aria-live="polite" className="mt-1">
+      {/* ── the raw result ───────────────────────────────────────────────── */}
+      <section aria-labelledby="staff-output-heading" className="mod">
+        <div className="mod-head">
+          <h2 id="staff-output-heading">Last action result</h2>
+          <p className="mod-note">
+            Exactly what the action returned — the same payload an agent receives.
+          </p>
+        </div>
+
+        <p aria-live="polite" className="mod-note">
           {busy ? `Running ${busy}…` : output === null ? 'Nothing run yet.' : ''}
         </p>
+
         {output !== null ? (
-          <pre className="mt-1 overflow-x-auto border p-2 text-xs">
-            {JSON.stringify(output, null, 2)}
-          </pre>
+          <pre className="well gap-top">{JSON.stringify(output, null, 2)}</pre>
         ) : null}
+
         {isActionError(output) ? (
-          <p role="alert" className="mt-1">
+          <p role="alert" className="alert">
             {output.message} {output.hint}
           </p>
         ) : null}
       </section>
 
-      <p className="mt-6">
-        {staffById(model, actorId ?? '')
-          ? 'Your name, notes and pay rate stay in this tab. An agent driving this page sees ids, skills and counts only.'
-          : ''}
-      </p>
+      {/* The product claim, given the weight it earns. */}
+      {staffById(model, actorId ?? '') ? (
+        <div className="claim">
+          <p>Your name, notes and pay rate stay in this tab.</p>
+          <span className="seam" aria-hidden="true" />
+          <p className="claim-foot">An agent driving this page sees ids, skills and counts only.</p>
+        </div>
+      ) : null}
     </div>
   );
 }

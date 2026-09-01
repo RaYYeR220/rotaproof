@@ -10,10 +10,23 @@ function clock(minutes: number): string {
 }
 
 /**
+ * The mark carried by the skill that a rule in this week actually turns on. Everything
+ * else is a barista, which is the baseline rather than a qualification worth a badge.
+ */
+function marker(skills: readonly string[] | undefined): { glyph: string; said: string } {
+  if (skills?.includes('keyholder')) return { glyph: 'K', said: ', keyholder' };
+  if (skills?.includes('food_safety')) return { glyph: 'F', said: ', food-safety certificate' };
+  return { glyph: '·', said: '' };
+}
+
+/**
  * The week as a table.
  *
  * Names appear here and nowhere an agent can reach: the page is the manager's own screen,
  * and the redaction boundary sits at the tool result, not at the pixel.
+ *
+ * A filled slot is a pad raised off the surface; an empty one is a hole in it. That is the
+ * whole legend — you can see an unstaffed shift from across the room.
  */
 export default function RosterGrid({
   model,
@@ -33,20 +46,22 @@ export default function RosterGrid({
   }
 
   return (
-    <table id="roster-grid" className="w-full border text-left">
-      <caption className="py-2 text-left">
+    <table id="roster-grid" className="week">
+      <caption>
         Week of {model.horizon.startDate}
-        {schedule ? '' : ' — not solved yet'}
+        {schedule
+          ? '. K marks a keyholder, F a food-safety certificate. An empty shift is sunk into the surface.'
+          : ' — not solved yet'}
       </caption>
       <thead>
         <tr>
-          <th scope="col" className="border p-2">
-            Day
+          <th scope="col">
+            <span className="vh">Day</span>
           </th>
           {model.shiftTypes.map((shift) => (
-            <th key={shift.id} scope="col" className="border p-2">
+            <th key={shift.id} scope="col">
               {shift.label}
-              <span className="block font-normal">
+              <span className="sub">
                 {clock(shift.startMinutes)} · {shift.durationMinutes / 60}h
               </span>
             </th>
@@ -58,26 +73,40 @@ export default function RosterGrid({
           const date = dateOf(model.horizon, day);
           return (
             <tr key={day}>
-              <th scope="row" className="border p-2">
-                {WEEKDAY.format(new Date(`${date}T00:00:00Z`))}
-                <span className="block font-normal">
-                  day {day} · {date}
+              <th scope="row">
+                <span className="pad">
+                  <b>{WEEKDAY.format(new Date(`${date}T00:00:00Z`))}</b>
+                  <i>
+                    day {day} · {date}
+                  </i>
                 </span>
               </th>
               {model.shiftTypes.map((shift) => {
                 const people = (byCell.get(`${day}:${shift.id}`) ?? []).sort();
                 return (
-                  <td key={shift.id} className="border p-2 align-top">
+                  <td key={shift.id}>
                     {people.length === 0 ? (
-                      <span>—</span>
+                      <span className="cell empty">
+                        <span aria-hidden="true">—</span>
+                        <span className="vh">Nobody rostered</span>
+                      </span>
                     ) : (
-                      <ul>
-                        {people.map((id) => (
-                          <li key={id}>
-                            {id} · {staffById(model, id)?.name ?? 'unknown'}
-                          </li>
-                        ))}
-                      </ul>
+                      <span className="cell">
+                        {people.map((id) => {
+                          const person = staffById(model, id);
+                          const mark = marker(person?.skills);
+                          return (
+                            <span key={id} className="who">
+                              <span className="badge" aria-hidden="true">
+                                {mark.glyph}
+                              </span>
+                              <span className="sid">{id}</span>
+                              {person?.name ?? 'unknown'}
+                              {mark.said ? <span className="vh">{mark.said}</span> : null}
+                            </span>
+                          );
+                        })}
+                      </span>
                     )}
                   </td>
                 );

@@ -182,8 +182,17 @@ export class WebMcpBinding {
     attempt = 0,
   ): Promise<void> {
     const controller = new AbortController();
-    const annotations: WebMcpAnnotations = {};
-    if (action.readOnly) annotations.readOnlyHint = true;
+
+    // `readOnlyHint` is written explicitly on every tool, including the writes, rather than
+    // left off them.
+    //
+    // The spec says the absence of the hint is itself the write signal, and that is true of
+    // the spec. It is not true of the shipping consumer: ChatGPT's built-in browser counts
+    // the split by reading the property, so a surface of three reads and three writes with
+    // the hint omitted on the writes displays as "3 read, 0 write tools" — the writes
+    // vanish from the very affordance a person uses to decide whether to trust the page.
+    // Verified against the ChatGPT desktop app on GPT-5.6 Terra.
+    const annotations: WebMcpAnnotations = { readOnlyHint: action.readOnly };
     if (action.untrustedContent) annotations.untrustedContentHint = true;
 
     const registerOptions: WebMcpRegisterOptions = { signal: controller.signal };

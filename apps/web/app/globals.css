@@ -1,25 +1,1430 @@
 @import 'tailwindcss';
 
 /*
- * Deliberately thin. The markup carries the structure and a later pass carries the look;
- * what is here is the part that is not decoration — a visible focus ring, and defaults
- * that keep the page readable before any of it is styled.
+ * ─────────────────────────────────────────────────────────────────────────────
+ * RotaProof — Soft tactile
+ *
+ * One moulded putty surface. There are no borders anywhere on this page: every
+ * edge is made of light, a paired shadow and highlight on the same shape.
+ *
+ * The discipline that keeps it usable rather than merely soft:
+ *
+ *   1. Only CONTAINERS are low-contrast. Type is always full-strength ink.
+ *      Nothing sets `opacity` on text — hierarchy comes from size, weight,
+ *      letter-spacing and the sans/mono switch, never from fading the ink.
+ *   2. The focus ring is a solid 3px plum stroke. Never a shadow: a shadow
+ *      cannot be seen against a surface that is already made of shadows.
+ *   3. Elevation carries meaning. In the conflict panel a rule that can be
+ *      lifted sits proud of the mould; a rule that is not enough on its own
+ *      stays pressed into it. The physical state IS the logical state.
+ *
+ * Semantic colour: plum = the agent and its tool calls · sage = optimal,
+ * verified, sufficient · clay = infeasible, blocked, not-enough.
+ * ─────────────────────────────────────────────────────────────────────────────
  */
 
 :root {
-  color-scheme: light dark;
+  --ground: #e6e2dc;
+  --raised: #edeae4;
+  --shadow: #c3bdb4;
+  --highlight: #ffffff;
+  --ink: #2c2a27;
+  --plum: #6d5170;
+  --sage: #4e7a5b;
+  --clay: #a8452f;
+
+  /*
+   * Text-safe accents.
+   *
+   * The three accents are tuned for MARKS on putty, not for words. Sage in
+   * particular lands at 3.82:1 on the ground, which is fine for a dot and not
+   * fine for a label. These darker siblings are what any accent-coloured TEXT
+   * uses: plum-ink 6.8:1, sage-ink 6.1:1, clay-ink 6.0:1, all on the ground.
+   * In dark mode the given accents already clear 5.9:1, so they alias straight
+   * through and the palette stays the one the study specified.
+   */
+  --plum-ink: #5a4260;
+  --sage-ink: #2f5a44;
+  --clay-ink: #8e3623;
+
+  --sans: var(--font-outfit), system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', sans-serif;
+  --mono: var(--font-mono-face), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  --up: 6px 6px 14px var(--shadow), -6px -6px 14px var(--highlight);
+  --up-sm: 3px 3px 7px var(--shadow), -3px -3px 7px var(--highlight);
+  --up-lg: 16px 16px 34px var(--shadow), -12px -12px 28px var(--highlight);
+  --in: inset 5px 5px 11px var(--shadow), inset -5px -5px 11px var(--highlight);
+  --in-sm: inset 3px 3px 6px var(--shadow), inset -3px -3px 6px var(--highlight);
+  --in-deep: inset 9px 9px 20px var(--shadow), inset -7px -7px 16px var(--highlight);
+  --veil: rgba(230, 226, 220, 0.72);
+  --sunk: color-mix(in srgb, var(--ground) 88%, var(--shadow));
+
+  --r-mod: 24px;
+  --r-sub: 18px;
+  --r-ctl: 12px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #23211f;
+    --raised: #2b2926;
+    --shadow: #141312;
+    --highlight: #3a3733;
+    --ink: #ede9e2;
+    --plum: #b492b6;
+    --sage: #86be97;
+    --clay: #e08d77;
+    --veil: rgba(35, 33, 31, 0.74);
+    --sunk: color-mix(in srgb, var(--ground) 86%, var(--shadow));
+
+    --plum-ink: var(--plum);
+    --sage-ink: var(--sage);
+    --clay-ink: var(--clay);
+
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  border: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  /*
+   * Both are needed. `clip` on the body alone does not propagate to the viewport, so
+   * the page stayed 140px scrollable at 390px however well the week grid behaved in
+   * its own well. Wide content still scrolls inside `.scroll`; the page never does.
+   */
+  overflow-x: clip;
 }
 
 body {
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  line-height: 1.5;
+  margin: 0;
+  padding: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 300 16px/1.55 var(--sans);
+  /* Nothing is allowed to push the page sideways; wide things scroll in their own well. */
+  overflow-x: clip;
+  -webkit-font-smoothing: antialiased;
 }
 
-:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 2px;
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+ol,
+dl,
+dd,
+figure,
+pre {
+  margin: 0;
+}
+
+ul,
+ol {
+  list-style: none;
+  padding: 0;
 }
 
 table {
-  border-collapse: collapse;
+  border-collapse: separate;
+}
+
+button,
+select,
+input,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* The one focus treatment on the page: a solid stroke, never a shadow. */
+:focus-visible {
+  outline: 3px solid var(--plum);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* ── primitives ─────────────────────────────────────────────────────────── */
+
+.vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-weight: 400;
+  font-size: 0.86em;
+  letter-spacing: -0.01em;
+}
+
+/* Micro-label. Full ink, never faded — the size and tracking do the demoting. */
+.lab {
+  font: 600 11px/1 var(--sans);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.skip {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 90;
+}
+
+.skip:focus {
+  left: 14px;
+  top: 14px;
+  padding: 14px 20px;
+  border-radius: var(--r-ctl);
+  background: var(--plum);
+  color: var(--raised);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.shell {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 26px 18px 96px;
+}
+
+/* ── site header ────────────────────────────────────────────────────────── */
+
+.site-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 26px;
+}
+
+.mark {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-radius: 22px;
+  background: var(--raised);
+  box-shadow: var(--up);
+}
+
+.mark .glyph {
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  background: var(--ground);
+  box-shadow: var(--in-sm);
+  flex: 0 0 auto;
+}
+
+.mark .wordmark {
+  font: 600 20px/1 var(--sans);
+  letter-spacing: -0.01em;
+}
+
+.navpills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+  padding: 7px;
+  border-radius: 20px;
+  background: var(--ground);
+  box-shadow: var(--in-sm);
+}
+
+.navpill {
+  display: inline-block;
+  padding: 9px 17px;
+  border-radius: 13px;
+  background: var(--raised);
+  box-shadow: var(--up-sm);
+  color: var(--ink);
+  font: 500 14px/1.2 var(--sans);
+  text-decoration: none;
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.navpill:hover {
+  box-shadow: var(--up);
+  transform: translateY(-1px);
+}
+
+/* The page you are on is the switch that is pressed. */
+.navpill[aria-current='page'] {
+  background: var(--ground);
+  box-shadow: var(--in-sm);
+  font-weight: 600;
+  transform: none;
+  color: var(--plum-ink);
+}
+
+/* ── module shell ───────────────────────────────────────────────────────── */
+
+.mod {
+  border-radius: var(--r-mod);
+  background: var(--raised);
+  box-shadow: var(--up);
+  padding: 26px 26px 28px;
+  margin-bottom: 26px;
+}
+
+.mod-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px 16px;
+  margin-bottom: 18px;
+}
+
+.mod-head h1,
+.mod-head h2 {
+  font: 600 13px/1 var(--sans);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.mod-note {
+  font: 300 14px/1.5 var(--sans);
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.count-tag {
+  padding: 7px 14px;
+  border-radius: 11px;
+  background: var(--ground);
+  box-shadow: var(--in-sm);
+  font: 400 12px/1 var(--mono);
+  white-space: nowrap;
+}
+
+/* ── controls ───────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  min-height: 44px;
+  border-radius: 14px;
+  background: var(--raised);
+  box-shadow: var(--up-sm);
+  color: var(--ink);
+  font: 600 14.5px/1 var(--sans);
+  cursor: pointer;
+  text-align: center;
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.btn:hover:not(:disabled) {
+  box-shadow: var(--up);
+  transform: translateY(-1px);
+}
+
+.btn:active:not(:disabled) {
+  box-shadow: var(--in-sm);
+  transform: none;
+}
+
+/*
+ * A disabled control is pressed flat into the surface and stays there. It keeps
+ * full-strength ink — a greyed-out label is exactly the failure this design
+ * refuses — so the shape alone says it cannot be moved.
+ */
+.btn:disabled {
+  background: var(--ground);
+  box-shadow: var(--in-sm);
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-primary {
+  background: var(--plum);
+  color: var(--raised);
+  box-shadow: var(--up);
+}
+
+.btn-primary:hover:not(:disabled) {
+  box-shadow: var(--up-lg);
+  transform: translateY(-2px);
+}
+
+.btn-danger {
+  color: var(--clay-ink);
+}
+
+.btn-sm {
+  padding: 9px 15px;
+  min-height: 38px;
+  border-radius: var(--r-ctl);
+  font-size: 13px;
+}
+
+.btnrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 11px;
+}
+
+/* Every control that takes typed or chosen input is a recess. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.field > label {
+  font: 600 10.5px/1.2 var(--sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.control {
+  padding: 12px 15px;
+  min-height: 44px;
+  border-radius: var(--r-ctl);
+  background: var(--ground);
+  box-shadow: var(--in-sm);
+  font: 500 14.5px/1.3 var(--sans);
+  width: 100%;
+  min-width: 0;
+  appearance: none;
+}
+
+select.control {
+  /* Room for the chevron drawn as a background image below. */
+  padding-right: 38px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 20px) calc(50% + 1px),
+    calc(100% - 14px) calc(50% + 1px);
+  background-size:
+    6px 6px,
+    6px 6px;
+  background-repeat: no-repeat;
+}
+
+textarea.control {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.6;
+  resize: vertical;
+}
+
+/* A row of labelled controls that reflows to one per line on a narrow screen. */
+.fieldrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+}
+
+.fieldrow .field {
+  flex: 0 1 auto;
+  min-width: 190px;
+}
+
+.fieldrow .field.grow {
+  flex: 1 1 260px;
+}
+
+/* ── the solve band ─────────────────────────────────────────────────────── */
+
+.band {
+  border-radius: var(--r-mod);
+  background: var(--raised);
+  box-shadow: var(--up);
+  padding: 22px 26px 24px;
+  margin-bottom: 26px;
+}
+
+.band-controls {
+  margin-bottom: 20px;
+}
+
+.solve-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 16px 20px;
+  border-radius: var(--r-sub);
+  background: var(--ground);
+  box-shadow: var(--in);
+}
+
+.solve-line .pip {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--plum);
+  box-shadow: var(--in-sm), 0 0 0 5px var(--ground);
+  flex: 0 0 auto;
+}
+
+.solve-line[data-state='optimal'] .pip,
+.solve-line[data-state='feasible'] .pip {
+  background: var(--sage);
+}
+
+.solve-line[data-state='infeasible'] .pip,
+.solve-line[data-state='error'] .pip,
+.solve-line[data-state='timeout'] .pip {
+  background: var(--clay);
+}
+
+.solve-line .word {
+  font: 600 clamp(19px, 2.4vw, 24px) / 1 var(--sans);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* "Solving…" and "Not solved yet." are sentences, not status words. */
+.solve-line[data-state='pending'] .word {
+  font-size: clamp(16px, 2vw, 19px);
+  letter-spacing: 0.01em;
+  text-transform: none;
+  font-weight: 500;
+}
+
+.solve-line .sep {
+  font: 400 15px/1 var(--mono);
+}
+
+.solve-line .fig {
+  font: 400 16px/1.1 var(--mono);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.alert {
+  margin-top: 14px;
+  padding: 14px 17px;
+  border-radius: var(--r-sub);
+  background: var(--ground);
+  box-shadow: var(--in-sm);
+  color: var(--clay-ink);
+  font-weight: 500;
+}
+
+/* ── the conflict, and the mould ────────────────────────────────────────── */
+
+.hero {
+  padding: 30px 28px 32px;
+}
+
+/*
+ * The count is the argument, so the count is the headline. The solver's own narrative
+ * names all six rules in prose and the mould below names them again; setting that at
+ * display size buried the one fact a manager acts on.
+ */
+.verdict {
+  margin-bottom: 16px;
+}
+
+.verdict-lead {
+  font: 300 clamp(25px, 3.6vw, 40px) / 1.14 var(--sans);
+  letter-spacing: -0.025em;
+  max-width: 21ch;
+}
+
+.verdict-rest {
+  margin-top: 12px;
+  font: 500 15px/1.5 var(--sans);
+  max-width: 52ch;
+}
+
+.hero-narr {
+  font: 300 15px/1.65 var(--sans);
+  max-width: 80ch;
+}
+
+.hero-caveat {
+  margin-bottom: 8px;
+  padding: 14px 17px;
+  border-radius: var(--r-sub);
+  background: var(--ground);
+  box-shadow: var(--in-sm);
+  font: 500 14px/1.5 var(--sans);
+  max-width: 74ch;
+}
+
+/* One well, holding every rule in the clash. */
+.mould {
+  margin-top: 22px;
+  padding: 20px;
+  border-radius: var(--r-mod);
+  background: var(--ground);
+  box-shadow: var(--in-deep);
+}
+
+.switches {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(min(268px, 100%), 1fr));
+}
+
+.switch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 17px 19px 17px;
+  border-radius: 20px;
+  transition:
+    box-shadow 0.3s ease,
+    transform 0.3s ease,
+    background-color 0.3s ease;
+}
+
+/*
+ * Sufficient: relaxing this one alone makes the week work. It sits proud of the
+ * mould, and rises further when you reach for it.
+ */
+.switch--lift {
+  background: var(--raised);
+  box-shadow: var(--up);
+}
+
+.switch--lift:hover,
+.switch--lift:focus-within {
+  box-shadow: var(--up-lg);
+  transform: translateY(-3px);
+}
+
+/*
+ * Not sufficient: relaxing this one leaves a second blocker behind. It stays
+ * pressed into the mould and does not rise, however hard you lean on it.
+ */
+.switch--stuck {
+  background: var(--sunk);
+  box-shadow: var(--in-deep);
+  /* Sunk content sits further in, so the recess reads as depth and not as a flat tile. */
+  padding: 21px 23px 21px;
+}
+
+.switch-id {
+  font: 400 12px/1.3 var(--mono);
+  letter-spacing: -0.01em;
+}
+
+.switch-label {
+  font: 600 16.5px/1.3 var(--sans);
+  letter-spacing: -0.005em;
+}
+
+.switch-effect {
+  font: 300 14px/1.5 var(--sans);
+}
+
+.switch-state {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 4px;
+  font: 600 11px/1.35 var(--sans);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+/*
+ * Shape carries the state as well as colour: a lifted rule gets a round bead standing
+ * proud, a stuck one a square nub driven into the surface. Colour is never the only
+ * channel.
+ */
+.switch-state .dot {
+  width: 11px;
+  height: 11px;
+  margin-top: 3px;
+  flex: 0 0 auto;
+}
+
+.switch--lift .switch-state {
+  color: var(--sage-ink);
+}
+
+.switch--lift .switch-state .dot {
+  background: var(--sage);
+  border-radius: 50%;
+  box-shadow: var(--up-sm);
+}
+
+.switch--stuck .switch-state {
+  color: var(--clay-ink);
+}
+
+.switch--stuck .switch-state .dot {
+  background: var(--clay);
+  border-radius: 3px;
+}
+
+.switch-why {
+  font: 500 13.5px/1.5 var(--sans);
+  color: var(--clay-ink);
+}
+
+/* Pushed to the floor of the tile so the row of buttons lines up across the mould. */
+.switch-act {
+  margin-top: auto;
+  padding-top: 14px;
+  align-self: flex-start;
+}
+
+/* The thesis, sunk into the panel so it reads as the surface speaking. */
+.judge {
+  margin-top: 26px;
+  padding: 26px 26px 22px;
+  border-radius: 22px;
+  background: var(--ground);
+  box-shadow: var(--in-deep);
+}
+
+.judge p {
+  font: 300 clamp(23px, 3.6vw, 38px) / 1.16 var(--sans);
+  letter-spacing: -0.02em;
+  max-width: 20ch;
+}
+
+.judge .seam {
+  display: block;
+  width: 88px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--plum);
+  margin-top: 24px;
+}
+
+.judge .judge-foot {
+  max-width: none;
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  font: 400 13px/1.5 var(--mono);
+  letter-spacing: -0.01em;
+}
+
+/* ── wide content: its own well, its own scrollbar ──────────────────────── */
+
+/*
+ * `position: relative` is load-bearing, not decoration. The `.vh` spans inside the week
+ * grid are absolutely positioned; without a positioned ancestor their containing block is
+ * the initial one, so they escaped this well AND the body's clip and sat at their
+ * unclipped static position — dragging 140px of empty scrollable width onto the page at
+ * 390px. Containing them here is the fix; clipping the root was only ever a plaster.
+ */
+.scroll {
+  position: relative;
+  overflow-x: auto;
+  padding: 4px 2px 10px;
+  border-radius: var(--r-sub);
+}
+
+.scroll:focus-visible {
+  outline-offset: 0;
+}
+
+/* ── the week ───────────────────────────────────────────────────────────── */
+
+.week {
+  width: 100%;
+  border-spacing: 9px;
+  text-align: left;
+}
+
+.week caption {
+  text-align: left;
+  font: 300 14px/1.5 var(--sans);
+  padding: 0 4px 14px;
+  max-width: 74ch;
+}
+
+.week th,
+.week td {
+  padding: 0;
+  vertical-align: top;
+  text-align: left;
+}
+
+.week thead th {
+  font: 600 11px/1.2 var(--sans);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 4px 8px 2px;
+  white-space: nowrap;
+}
+
+.week thead th .sub {
+  display: block;
+  font: 400 12.5px/1.5 var(--mono);
+  letter-spacing: -0.01em;
+  text-transform: none;
+}
+
+.week tbody th {
+  min-width: 104px;
+}
+
+.week tbody th .pad {
+  display: block;
+  padding: 14px 15px;
+  border-radius: 16px;
+  background: var(--raised);
+  box-shadow: var(--up-sm);
+}
+
+.week tbody th .pad b {
+  display: block;
+  font: 600 14px/1.2 var(--sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.week tbody th .pad i {
+  font-style: normal;
+  font: 400 12px/1.7 var(--mono);
+  letter-spacing: -0.01em;
+}
+
+.week td {
+  min-width: 168px;
+}
+
+.week .cell {
+  display: block;
+  padding: 13px 15px;
+  border-radius: 16px;
+  background: var(--raised);
+  box-shadow: var(--up-sm);
+}
+
+/* An unfilled slot is a hole in the surface, not an em dash in a box. */
+.week .cell.empty {
+  background: var(--ground);
+  box-shadow: var(--in);
+  font: 400 13px/1.4 var(--mono);
+}
+
+.week .who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font: 500 14.5px/1.75 var(--sans);
+  white-space: nowrap;
+}
+
+.badge {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 7px;
+  background: var(--ground);
+  box-shadow: var(--in-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 10px/1 var(--sans);
+}
+
+.week .sid {
+  font: 400 12px/1 var(--mono);
+}
+
+/* ── rules on the board ─────────────────────────────────────────────────── */
+
+.rules {
+  display: grid;
+  gap: 8px;
+}
+
+/*
+ * Thirty-odd rules is a column to be scanned, not a stack of cards to be read. The grid
+ * keeps the id, the statement, the kind and the actions on four true columns so the eye
+ * can run straight down any one of them.
+ */
+.rule {
+  display: grid;
+  grid-template-columns: minmax(150px, 210px) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 6px 16px;
+  padding: 11px 16px;
+  border-radius: 14px;
+  background: var(--raised);
+  box-shadow: var(--up-sm);
+}
+
+/* A rule that is one of the six in the clash is pressed in, here as well. */
+.rule--member {
+  background: var(--ground);
+  box-shadow: var(--in);
+}
+
+.rule-id {
+  font: 400 13px/1.4 var(--mono);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.rule-label {
+  font: 500 14.5px/1.4 var(--sans);
+  min-width: 0;
+}
+
+.rule-sub {
+  display: block;
+  margin-top: 3px;
+  font: 400 11px/1.4 var(--mono);
+  letter-spacing: -0.01em;
+}
+
+.rule-member-note {
+  display: block;
+  margin-top: 4px;
+  font: 600 10px/1.3 var(--sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--plum-ink);
+}
+
+.rule-acts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 13px;
+  border-radius: 10px;
+  font: 600 10.5px/1 var(--sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.pill .sq {
+  width: 9px;
+  height: 9px;
+  flex: 0 0 auto;
+  background: var(--ink);
+}
+
+.pill-hard {
+  background: var(--ground);
+  box-shadow: var(--in-sm);
+}
+
+.pill-soft {
+  background: var(--raised);
+  box-shadow: var(--up-sm);
+}
+
+.pill-soft .sq {
+  background: transparent;
+  border-radius: 50%;
+  box-shadow: var(--in-sm);
+}
+
+.rule--member .pill-soft {
+  background: var(--raised);
+}
+
+.gap-top {
+  margin-top: 14px;
+}
+
+/* ── list rows shared by staff / versions / cleared ─────────────────────── */
+
+.stack {
+  display: grid;
+  gap: 10px;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  padding: 14px 17px;
+  border-radius: var(--r-sub);
+  background: var(--raised);
+  box-shadow: var(--up-sm);
+  font: 500 14.5px/1.45 var(--sans);
+}
+
+.row--quiet {
+  background: var(--ground);
+  box-shadow: var(--in-sm);
+}
+
+.grow {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.push {
+  margin-left: auto;
+}
+
+.empty-note {
+  padding: 15px 18px;
+  border-radius: var(--r-sub);
+  background: var(--ground);
+  box-shadow: var(--in-sm);
+  font: 300 14.5px/1.5 var(--sans);
+}
+
+/* A recessed well for machine output: JSON, hashes, raw text. */
+.well {
+  padding: 16px 18px;
+  border-radius: var(--r-sub);
+  background: var(--ground);
+  box-shadow: var(--in);
+  font: 400 12.5px/1.7 var(--mono);
+  letter-spacing: -0.01em;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── the agent strip ────────────────────────────────────────────────────── */
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 16px 20px;
+  border-radius: var(--r-sub);
+  background: var(--ground);
+  box-shadow: var(--in);
+  margin-bottom: 18px;
+}
+
+.chip .live {
+  position: relative;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--plum);
+  flex: 0 0 auto;
+}
+
+.chip .live::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px var(--plum);
+  opacity: 0.55;
+  animation: ping 2.4s ease-out infinite;
+}
+
+@keyframes ping {
+  0% {
+    transform: scale(0.62);
+    opacity: 0.6;
+  }
+  70%,
+  100% {
+    transform: scale(1.12);
+    opacity: 0;
+  }
+}
+
+.chip .txt {
+  font: 600 15px/1.35 var(--sans);
+}
+
+.calls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-height: 168px;
+  overflow-y: auto;
+  align-content: flex-start;
+}
+
+.call {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 15px;
+  border-radius: 13px;
+  background: var(--ground);
+  box-shadow: var(--in-sm);
+  font: 400 12.5px/1.3 var(--mono);
+  letter-spacing: -0.01em;
+}
+
+.call .nib {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--sage);
+  flex: 0 0 auto;
+}
+
+/* A call still running is raised — it is the one thing on the page in motion. */
+.call[data-phase='start'] {
+  background: var(--raised);
+  box-shadow: var(--up-sm);
+}
+
+.call[data-phase='start'] .nib {
+  border-radius: 2px;
+  background: var(--plum);
+}
+
+.call[data-phase='error'] .nib {
+  background: var(--clay);
+}
+
+.call .when {
+  font-variant-numeric: tabular-nums;
+}
+
+.call .verb {
+  font: 600 10px/1 var(--sans);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.call[data-phase='error'] .verb {
+  color: var(--clay-ink);
+}
+
+/* ── the approval modal ─────────────────────────────────────────────────── */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--veil);
+  backdrop-filter: blur(11px);
+  -webkit-backdrop-filter: blur(11px);
+  z-index: 40;
+}
+
+.dialog {
+  position: fixed;
+  z-index: 41;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(540px, calc(100vw - 28px));
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  padding: 30px 30px 26px;
+  border-radius: 28px;
+  background: var(--raised);
+  box-shadow:
+    34px 34px 80px var(--shadow),
+    -24px -24px 60px var(--highlight);
+}
+
+.dialog-kicker {
+  font: 600 10.5px/1.3 var(--sans);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--plum-ink);
+  margin-bottom: 12px;
+}
+
+.dialog h2 {
+  font: 300 clamp(24px, 4vw, 31px) / 1.2 var(--sans);
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+
+.dialog .sub {
+  font: 300 14.5px/1.5 var(--sans);
+  margin-bottom: 20px;
+}
+
+.changes {
+  display: grid;
+  gap: 13px;
+  padding: 18px 20px;
+  border-radius: var(--r-sub);
+  background: var(--ground);
+  box-shadow: var(--in);
+}
+
+.changes li {
+  display: flex;
+  gap: 13px;
+  align-items: flex-start;
+  font: 500 14.5px/1.45 var(--sans);
+}
+
+.changes .nub {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+  margin-top: 6px;
+  border-radius: 4px;
+  background: var(--raised);
+  box-shadow: var(--up-sm);
+}
+
+.acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.acts .btn-primary {
+  flex: 1 1 auto;
+}
+
+.dialog .tail {
+  margin-top: 16px;
+  font: 300 13.5px/1.5 var(--sans);
+}
+
+/* The support line borrows the solve band's shape; its text is a sentence, not a verdict. */
+#mc-support .word {
+  font: 500 15px/1.45 var(--sans);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* ── the claim the staff view ends on ───────────────────────────────────── */
+
+.claim {
+  margin-top: 4px;
+  padding: 28px 28px 24px;
+  border-radius: var(--r-mod);
+  background: var(--ground);
+  box-shadow: var(--in-deep);
+}
+
+.claim p {
+  font: 300 clamp(21px, 3vw, 31px) / 1.2 var(--sans);
+  letter-spacing: -0.02em;
+  max-width: 22ch;
+}
+
+.claim .seam {
+  display: block;
+  width: 88px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--plum);
+  margin-top: 20px;
+}
+
+.claim .claim-foot {
+  margin-top: 14px;
+  font: 400 13px/1.5 var(--mono);
+  letter-spacing: -0.01em;
+  max-width: 62ch;
+}
+
+/* ── tools inspector ────────────────────────────────────────────────────── */
+
+.tools {
+  width: 100%;
+  border-spacing: 9px;
+  text-align: left;
+}
+
+.tools caption {
+  text-align: left;
+  font: 300 14px/1.5 var(--sans);
+  padding: 0 4px 14px;
+  max-width: 74ch;
+}
+
+.tools thead th {
+  font: 600 10.5px/1.2 var(--sans);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 2px 10px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tools tbody th,
+.tools tbody td {
+  padding: 14px 16px;
+  background: var(--raised);
+  box-shadow: var(--up-sm);
+  border-radius: 14px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.tools tbody th {
+  font: 400 13px/1.5 var(--mono);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.tools .kindcol {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.tools .desc {
+  font: 300 14px/1.5 var(--sans);
+  min-width: 260px;
+}
+
+.pill-read {
+  background: var(--raised);
+  box-shadow: var(--up-sm);
+}
+
+.pill-read .sq {
+  background: var(--sage);
+  border-radius: 50%;
+}
+
+.pill-write {
+  background: var(--ground);
+  box-shadow: var(--in-sm);
+}
+
+.pill-write .sq {
+  background: var(--plum);
+}
+
+.schema {
+  margin-top: 10px;
+}
+
+.schema summary {
+  cursor: pointer;
+  font: 600 10.5px/1 var(--sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--ground);
+  box-shadow: var(--in-sm);
+  display: inline-block;
+  list-style: none;
+}
+
+.schema summary::-webkit-details-marker {
+  display: none;
+}
+
+.schema .well {
+  margin-top: 10px;
+  font-size: 12px;
+}
+
+/* ── responsive ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 720px) {
+  .shell {
+    padding: 16px 12px 80px;
+  }
+
+  .mod,
+  .band {
+    padding: 20px 17px 22px;
+    border-radius: 20px;
+  }
+
+  .hero {
+    padding: 22px 17px 24px;
+  }
+
+  .mould {
+    padding: 14px;
+    border-radius: 20px;
+  }
+
+  .judge {
+    padding: 20px 18px 18px;
+  }
+
+  .navpills {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .navpill {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+
+  .btnrow .btn {
+    flex: 1 1 auto;
+  }
+
+  .rule {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 13px 15px;
+  }
+
+  .rule-id {
+    grid-column: 1 / -1;
+  }
+
+  .rule-acts {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* The pulse is the only thing that says "an agent is attached". Hold it lit. */
+  .chip .live::after {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+
+  /* Elevation still changes on hover; the travel does not. */
+  .switch--lift:hover,
+  .switch--lift:focus-within,
+  .btn:hover:not(:disabled),
+  .btn-primary:hover:not(:disabled),
+  .navpill:hover {
+    transform: none;
+  }
 }

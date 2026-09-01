@@ -34,3 +34,5 @@ Thumbs.db
 
 # copied from the highs package at install and build time
 apps/web/public/highs.wasm
+
+.vercel

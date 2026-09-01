@@ -139,80 +139,86 @@ export default function ToolInspector() {
 
   return (
     <div>
-      <h1 className="text-lg font-semibold">Tools</h1>
-      <p className="mt-1">
-        The live agent surface of this page, read straight from the browser. No agent is
-        involved.
-      </p>
+      {/* ── support ──────────────────────────────────────────────────────── */}
+      <section aria-labelledby="tools-heading" className="band">
+        <div className="mod-head">
+          <h1 id="tools-heading">Tools</h1>
+          <p className="count-tag">{rows.length} registered</p>
+        </div>
 
-      <section aria-labelledby="support-heading" className="mt-4">
-        <h2 id="support-heading" className="text-xs font-semibold uppercase tracking-wide">
-          Support
-        </h2>
+        <p className="mod-note">
+          The live agent surface of this page, read straight from the browser. No agent is
+          involved.
+        </p>
 
-        <p id="mc-support" aria-live="polite" className="mt-1">
-          {supported}
+        <p id="mc-support" aria-live="polite" className="solve-line gap-top" data-state={available === false ? 'error' : available ? 'optimal' : 'pending'}>
+          <span className="pip" aria-hidden="true" />
+          <span className="word">{supported}</span>
         </p>
 
         {available === false ? (
-          <div className="mt-2 border p-3">
-            <p>To switch it on, start Chrome with:</p>
-            <pre className="mt-1 overflow-x-auto border p-2 text-xs">{CHROME_SWITCH}</pre>
-            <p className="mt-2">
+          <div className="gap-top">
+            <p className="mod-note">To switch it on, start Chrome with:</p>
+            <pre className="well gap-top">{CHROME_SWITCH}</pre>
+            <p className="mod-note gap-top">
               The ChatGPT desktop app&rsquo;s built-in browser supports WebMCP natively, with no
               switch to set.
             </p>
           </div>
         ) : null}
 
-        <button type="button" className="mt-2 border px-3 py-1" onClick={() => void refresh()}>
-          Refresh the tool list
-        </button>
+        <div className="btnrow gap-top">
+          <button type="button" className="btn" onClick={() => void refresh()}>
+            Refresh the tool list
+          </button>
+        </div>
       </section>
 
-      <section aria-labelledby="registered-heading" className="mt-6">
-        <h2 id="registered-heading" className="text-xs font-semibold uppercase tracking-wide">
-          Registered tools ({rows.length})
-        </h2>
+      {/* ── the surface ──────────────────────────────────────────────────── */}
+      <section aria-labelledby="registered-heading" className="mod">
+        <div className="mod-head">
+          <h2 id="registered-heading">Registered tools</h2>
+          <p className="mod-note">
+            A read sits on the surface; a write is pressed into it. The set changes with the
+            page — what is here is what an agent can reach right now.
+          </p>
+        </div>
 
-        <div className="mt-2 overflow-x-auto">
-          <table id="tools-table" className="w-full border text-left">
-            <caption className="sr-only">Tools currently registered by this page</caption>
+        <div className="scroll" tabIndex={0} role="region" aria-label="Registered tools">
+          <table id="tools-table" className="tools">
+            <caption>Tools currently registered by this page.</caption>
             <thead>
               <tr>
-                <th scope="col" className="border p-2">
-                  Name
-                </th>
-                <th scope="col" className="border p-2">
+                <th scope="col">Name</th>
+                <th scope="col" className="kindcol">
                   Kind
                 </th>
-                <th scope="col" className="border p-2">
-                  Description
-                </th>
+                <th scope="col">Description</th>
               </tr>
             </thead>
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td className="border p-2" colSpan={3}>
-                    No tools registered.
-                  </td>
+                  <td colSpan={3}>No tools registered.</td>
                 </tr>
               ) : (
                 rows.map((row) => (
                   <tr key={row.name} data-tool={row.name}>
-                    <th scope="row" className="border p-2 font-mono font-normal">
-                      {row.name}
-                    </th>
-                    <td className="border p-2">
-                      {row.readOnly ? 'read' : 'write'}
-                      {row.untrustedContent ? ' · untrusted content' : ''}
+                    <th scope="row">{row.name}</th>
+                    <td className="kindcol">
+                      <span className={`pill ${row.readOnly ? 'pill-read' : 'pill-write'}`}>
+                        <span className="sq" aria-hidden="true" />
+                        {row.readOnly ? 'read' : 'write'}
+                      </span>
+                      {row.untrustedContent ? (
+                        <span className="rule-sub">untrusted content</span>
+                      ) : null}
                     </td>
-                    <td className="border p-2">
+                    <td className="desc">
                       {row.description}
-                      <details className="mt-1">
+                      <details className="schema">
                         <summary>Input schema</summary>
-                        <pre className="mt-1 overflow-x-auto text-xs">{row.schema}</pre>
+                        <pre className="well">{row.schema}</pre>
                       </details>
                     </td>
                   </tr>
@@ -223,19 +229,22 @@ export default function ToolInspector() {
         </div>
       </section>
 
-      <section aria-labelledby="console-heading" className="mt-6">
-        <h2 id="console-heading" className="text-xs font-semibold uppercase tracking-wide">
-          Run a tool
-        </h2>
+      {/* ── run one by hand ──────────────────────────────────────────────── */}
+      <section aria-labelledby="console-heading" className="mod">
+        <div className="mod-head">
+          <h2 id="console-heading">Run a tool</h2>
+          <p className="mod-note">
+            Call anything on the surface yourself — no extension, no account, no model in the
+            loop.
+          </p>
+        </div>
 
-        <div className="mt-2 flex flex-wrap items-end gap-2">
-          <p>
-            <label htmlFor="tool-select" className="block">
-              Tool
-            </label>
+        <div className="fieldrow">
+          <p className="field">
+            <label htmlFor="tool-select">Tool</label>
             <select
               id="tool-select"
-              className="border px-2 py-1"
+              className="control"
               value={selected}
               onChange={(event) => setSelected(event.target.value)}
             >
@@ -247,10 +256,24 @@ export default function ToolInspector() {
             </select>
           </p>
 
+          <p className="field grow">
+            <label htmlFor="tool-args">Arguments (JSON)</label>
+            <textarea
+              id="tool-args"
+              className="control"
+              rows={4}
+              spellCheck={false}
+              value={args}
+              onChange={(event) => setArgs(event.target.value)}
+            />
+          </p>
+        </div>
+
+        <div className="btnrow gap-top">
           <button
             id="run-tool"
             type="button"
-            className="border px-3 py-1"
+            className="btn btn-primary"
             disabled={running || !selected}
             onClick={() => void run()}
           >
@@ -258,26 +281,7 @@ export default function ToolInspector() {
           </button>
         </div>
 
-        <p className="mt-2">
-          <label htmlFor="tool-args" className="block">
-            Arguments (JSON)
-          </label>
-          <textarea
-            id="tool-args"
-            className="w-full border p-2 font-mono text-xs"
-            rows={4}
-            spellCheck={false}
-            value={args}
-            onChange={(event) => setArgs(event.target.value)}
-          />
-        </p>
-
-        <pre
-          id="tool-output"
-          ref={outputRef}
-          aria-live="polite"
-          className="mt-2 overflow-x-auto border p-2 text-xs"
-        >
+        <pre id="tool-output" ref={outputRef} aria-live="polite" className="well gap-top">
           {output || 'Nothing run yet.'}
         </pre>
       </section>

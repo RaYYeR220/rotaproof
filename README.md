@@ -147,7 +147,12 @@ call stays open. The card shows exactly what will change. Declining returns
   that carry real semantics — `set_constraint` and `solve_roster` — get manual-grade
   descriptions, because for those the description *is* the documentation. The parity test
   pins that exception to exactly those two names.
-- **`readOnlyHint` is set honestly and never on a write.** Its absence is the signal.
+- **`readOnlyHint` is written on every tool, including the writes.** The spec says its
+  absence is the write signal, and that is true of the spec but not of the shipping
+  consumer: ChatGPT's built-in browser reads the property to build its read/write split, so
+  omitting it on writes displays a six-tool surface as "3 read, 0 write tools" — the writes
+  disappear from the exact affordance a person uses to decide whether to trust the page.
+  Found by opening this app in the ChatGPT desktop app and looking at the chip.
 - **`untrustedContentHint` on the one tool that returns text a colleague wrote.**
 - **Errors are guides.** A bad staff id comes back as *"There is no staff member 'Maria'.
   Valid staff ids: S1, S2, S3…"*, so an agent can correct itself without a human.
