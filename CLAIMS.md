@@ -22,7 +22,8 @@ Measurements below were taken on Windows 11, Node 24.13.0, Chrome 151.0.7922.174
 | claim | tier | evidence |
 |---|---|---|
 | The seeded ten-person week solves to **proven optimality**, objective **28.42**, **42** assignments | REPRODUCIBLE | `pnpm test packages/core/test/solve.test.ts` |
-| Solve time **~270 ms** for 210 binaries / ~320 rows | MEASURED | test output; browser figures on `/tools` |
+| Solve time **~270 ms** in Node; **331 ms cold / 198 ms warm in the browser** | MEASURED | test output, and the Chrome harness prints the in-browser figure |
+| Cold page load to solver ready: **~1,030 ms** | MEASURED | the wasm is worker-only and off the first-paint path; the seeded week renders immediately |
 | The same rules always produce the same schedule hash | REPRODUCIBLE | `solve.test.ts` → "is deterministic — the same rules give the same receipt" |
 | The solver's schedule is re-checked by an independent checker before it is returned; a disagreement downgrades the result to `error` | DESIGNED | `packages/core/src/solve.ts`, `check.ts` |
 | A schedule the checker rejects is never presented as valid | REPRODUCIBLE | `solve.test.ts` → "produces a schedule the independent checker accepts" |
@@ -81,6 +82,8 @@ Measurements below were taken on Windows 11, Node 24.13.0, Chrome 151.0.7922.174
 | `Origin-Agent-Cluster: ?1` and `Permissions-Policy: tools=(self)` are served | REPRODUCIBLE | asserted by the same harness against the deployed URL |
 | Chrome 151 calls `execute()` with one argument, so the spec's `AbortSignal` is absent | MEASURED | probed directly; the binding supplies its own controller and reads `options?.signal` so it starts working when the browser ships it |
 | When an agent abandons a call the page is not notified | MEASURED | agent side rejects with `AbortError`, page keeps waiting — hence the Cancel on every card |
+| Chrome 151 aborts a running `execute` when that tool's registration is aborted | MEASURED | found because `solve_roster` unregisters itself while solving; the binding defers any sync while a call is in flight |
+| 34/34 browser assertions and 55/55 eval steps pass against the built app | REPRODUCIBLE | `pnpm test:webmcp` and `pnpm evals` |
 | **NOT CLAIMED:** that this works in every browser | NOT CLAIMED | Two runtimes consume WebMCP today: the ChatGPT desktop app's built-in browser, and Chromium with the flag. Elsewhere the page is an ordinary, fully working web app with no tool surface, and `/tools` says so. |
 
 ## The evals

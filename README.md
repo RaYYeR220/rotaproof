@@ -37,6 +37,9 @@ of exactly three:
 
 There is no fourth branch where it guesses.
 
+In the browser, on the seeded ten-person week: **331 ms** cold, **198 ms** warm, and **206 ms**
+to prove a week impossible and name the six rules responsible.
+
 ### The moment the product is about
 
 Grant one person a Friday off in the seeded week and the page answers:
@@ -255,6 +258,12 @@ pnpm verify:receipt    # re-solve a published receipt and compare hashes
 - **When an agent abandons a call, the page is never told.** The agent side rejects with an
   `AbortError`; the page keeps waiting. A confirmation card would sit there forever, so every
   card carries its own Cancel. This is a browser gap, not a design choice.
+- **Chrome 151 aborts a running `execute` if that tool's registration is aborted.** This is a
+  nasty interaction with a state-driven tool surface: `solve_roster` sets `solving`, which
+  makes `solve_roster` unavailable, so the sync unregistered the tool 15 ms into its own call
+  and every agent-initiated solve died with `UnknownError`. The binding now holds any sync
+  requested while a call is in flight and runs it when the call ends. Worth knowing before
+  you build anything that changes its own availability.
 - **Shadow prices come from the LP relaxation**, not the integer problem. They are a good
   guide to which rule is expensive and are not the exact integer cost. Labelled as such
   everywhere they appear.
