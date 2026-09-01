@@ -6,3 +6,4 @@ export * from './mip.js';
 export * from './compile.js';
 export * from './solve.js';
 export * from './backend-highs.js';
+export * from './ledger.js';
