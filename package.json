@@ -1,0 +1,19 @@
+{
+  "name": "rotaproof",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "pnpm --filter @rotaproof/web dev",
+    "build": "pnpm --filter @rotaproof/web build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -b --pretty false",
+    "lint": "next lint --dir apps/web"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4",
+    "@types/node": "^24.3.0"
+  }
+}

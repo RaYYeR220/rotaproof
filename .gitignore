@@ -1,0 +1,50 @@
+# deps
+node_modules/
+.pnpm-store/
+
+# build
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+
+# env
+.env
+.env.*
+!.env.example
+
+# test / tooling output
+coverage/
+.evals/
+playwright-report/
+test-results/
+.vercel/
+.turbo/
+
+# os / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# working notes and design scratch — not part of the product
+internal/
+*-internal/
+notes/
+scratch/
+mockups/
+ui-prototypes/
+design-ref/
+variants/
+*.bundle
+*-backup*
+.remember/
+MEMORY.md
+.claude/
+.agents/
+superpowers/
+docs/superpowers/
+plans/
+specs/
