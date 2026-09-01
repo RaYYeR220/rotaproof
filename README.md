@@ -2,7 +2,7 @@
 
 **A shift roster that an agent can plan and a solver can prove — in your browser, over data the agent is never allowed to see.**
 
-Live: <https://rotaproof.vercel.app> · Tool surface: <https://rotaproof.vercel.app/tools> · Source: <https://github.com/RaYYeR220/rotaproof> · Reviewer's path: [JUDGES.md](JUDGES.md)
+Live: <https://rotaproof.vercel.app> · Demo: <https://youtu.be/SRsT2lYFumw> · Tool surface: <https://rotaproof.vercel.app/tools> · Reviewer's path: [JUDGES.md](JUDGES.md)
 
 ---
 

@@ -3,6 +3,8 @@
 No account, no credentials, no install, no faucet. The roster is seeded and the page works
 the moment it loads.
 
+If you would rather watch than click: <https://youtu.be/SRsT2lYFumw> (2:55).
+
 ---
 
 ## 1. Sixty seconds, no agent at all
