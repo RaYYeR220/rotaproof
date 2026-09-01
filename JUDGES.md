@@ -73,12 +73,22 @@ Try, in order:
 ## 5. Checking the claims
 
 ```bash
-git clone <repo> && cd rotaproof && pnpm install
+git clone https://github.com/RaYYeR220/rotaproof && cd rotaproof && pnpm install
 
 pnpm test           # 190 tests
-pnpm test:webmcp    # drives real Chrome and asserts the live tool surface
-pnpm evals          # 40 eval cases, deterministic, no model and no API key
+pnpm test:webmcp    # 34 assertions against real Chrome, on the live site
+pnpm evals          # 55 eval steps, deterministic, no model and no API key
 pnpm verify:receipt # re-solve a published receipt and compare hashes
+```
+
+All four are green against <https://rotaproof.vercel.app> as deployed:
+
+```
+pnpm test                                       190/190
+node tests/webmcp.harness.mjs https://rotaproof.vercel.app     34/34
+webmcp-evals smoke  …/?reset=1       manager    44/44
+webmcp-evals smoke  …/staff?reset=1  staff      11/11
+node scripts/verify-receipt.mjs                 both reproduce
 ```
 
 Four of those are worth looking at specifically.
