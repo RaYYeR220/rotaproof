@@ -32,9 +32,9 @@ const nextConfig: NextConfig = {
 
   reactStrictMode: true,
 
-  // Next writes its own AGENTS.md and CLAUDE.md into the package on every run. The repo
-  // already has orientation for both, written for this project rather than for the
-  // framework, so the generated pair is turned off rather than left to overwrite it.
+  // Next drops its own framework orientation files into the package on every run. The
+  // repo already carries orientation written for this project, so the generated pair is
+  // turned off rather than left to overwrite it.
   agentRules: false,
 
   async headers() {

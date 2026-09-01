@@ -95,9 +95,15 @@ export function boundList<T>(
   items: T[],
   render: (item: T) => string,
   hint: string,
+  /**
+   * Room left for the object the list is returned inside. Without it a list can fill the
+   * whole budget on its own and then the envelope tips the result over, so `boundResult`
+   * throws the lot away and the caller gets an overflow object instead of an answer.
+   */
+  envelopeReserve = 300,
 ): { items: string[]; truncation?: TruncationInfo } {
   const rendered: string[] = [];
-  let budget = MAX_OUTPUT_CHARACTERS;
+  let budget = Math.max(0, MAX_OUTPUT_CHARACTERS - envelopeReserve);
 
   for (const item of items) {
     const line = render(item);

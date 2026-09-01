@@ -18,6 +18,7 @@ import {
   relaxConstraint,
   setConstraint,
   solveRosterAction,
+  startNextWeek,
 } from '@rotaproof/registry';
 
 import RosterGrid from '@/components/RosterGrid';
@@ -43,11 +44,16 @@ export default function ManagerView() {
 
   const [busy, setBusy] = useState<string | null>(null);
   const [output, setOutput] = useState<unknown>(null);
+  /** Rules the roll-forward dropped, kept on screen until the manager has dealt with them. */
+  const [cleared, setCleared] = useState<string[] | null>(null);
   const solveAbort = useRef<AbortController | null>(null);
 
   const { model, schedule, lastResult, status, solving } = session;
   const conflict = lastResult?.conflict;
   const canPublish = publishRoster.available(session);
+  const canRollForward = startNextWeek.available(session);
+  const sufficient = (conflict?.suggestions ?? []).filter((s) => s.sufficient);
+  const insufficient = (conflict?.suggestions ?? []).filter((s) => !s.sufficient);
 
   async function dispatch<Args, Result>(
     label: string,
@@ -57,12 +63,31 @@ export default function ManagerView() {
   ) {
     setBusy(label);
     try {
-      setOutput(await runAction(action, args, signal ? { signal } : {}));
+      const result = await runAction(action, args, signal ? { signal } : {});
+      setOutput(result);
+      return result;
     } catch (error) {
-      setOutput({ error: 'failed', message: error instanceof Error ? error.message : String(error) });
+      const failure = {
+        error: 'failed',
+        message: error instanceof Error ? error.message : String(error),
+      };
+      setOutput(failure);
+      return failure;
     } finally {
       setBusy(null);
     }
+  }
+
+  /**
+   * Rolling into the next week drops every rule pinned to a particular day, because a
+   * rule that looks weekly is indistinguishable in the data from a one-off. The list of
+   * what went is the point of the action, so it gets its own place on the page rather
+   * than being left in the result panel.
+   */
+  async function rollForward() {
+    const result = await dispatch('next-week', startNextWeek, {});
+    const dropped = (result as { cleared?: unknown })?.cleared;
+    setCleared(Array.isArray(dropped) ? (dropped as string[]) : []);
   }
 
   async function solve() {
@@ -132,6 +157,16 @@ export default function ManagerView() {
           </button>
 
           <button
+            id="start-next-week"
+            type="button"
+            className="border px-3 py-1"
+            disabled={!canRollForward || busy !== null}
+            onClick={rollForward}
+          >
+            Start next week
+          </button>
+
+          <button
             id="reset"
             type="button"
             className="border px-3 py-1"
@@ -170,14 +205,42 @@ export default function ManagerView() {
 
           <p className="mt-2">{conflict.narrative}</p>
 
+          {conflict.inconclusive > 0 ? (
+            <p id="conflict-caveat" className="mt-2">
+              {conflict.inconclusive} probe{conflict.inconclusive === 1 ? '' : 's'} did not finish,
+              so this list is an upper bound rather than a proof — the real clash may be smaller
+              than what is shown. Recheck for a settled answer.
+            </p>
+          ) : null}
+
+          <p id="conflict-sufficiency" className="mt-2">
+            {sufficient.length} of {conflict.suggestions.length} would be enough on their own.
+            Relaxing one of the others still leaves the week impossible.
+          </p>
+
+          {/*
+            Ordered by what actually helps. A rule can be load-bearing for this clash and
+            still leave a second, independent one behind when it goes, and sending a manager
+            to relax one of those wastes their afternoon.
+          */}
           <ul id="conflict-rules" className="mt-2 list-disc pl-5">
-            {conflict.suggestions.map((suggestion) => (
-              <li key={suggestion.constraintId} data-rule={suggestion.constraintId}>
+            {[...sufficient, ...insufficient].map((suggestion) => (
+              <li
+                key={suggestion.constraintId}
+                data-rule={suggestion.constraintId}
+                data-sufficient={String(suggestion.sufficient)}
+              >
                 <strong>{suggestion.label}</strong> — {suggestion.effect}{' '}
+                <em>
+                  {suggestion.sufficient
+                    ? 'Relaxing this one alone makes the week work.'
+                    : 'Not enough on its own: another blocker is left behind.'}
+                </em>{' '}
                 <button
                   type="button"
                   className="border px-2"
                   disabled={solving}
+                  aria-label={`Soften rule: ${suggestion.label}`}
                   onClick={() =>
                     dispatch('relax', relaxConstraint, { id: suggestion.constraintId, to: 'soft' })
                   }
@@ -240,6 +303,32 @@ export default function ManagerView() {
           ))}
         </ul>
       </section>
+
+      {cleared !== null ? (
+        <section aria-labelledby="cleared-heading" className="mt-6 border p-3">
+          <h2 id="cleared-heading" className="text-xs font-semibold uppercase tracking-wide">
+            Cleared when the week rolled forward
+          </h2>
+          <p className="mt-2">
+            These rules were tied to last week&rsquo;s dates and have been dropped. Re-add any
+            that still apply.
+          </p>
+          <ul id="cleared-rules" className="mt-2 list-disc pl-5">
+            {cleared.length === 0 ? (
+              <li>Nothing was pinned to a particular day, so nothing was cleared.</li>
+            ) : (
+              cleared.map((rule) => <li key={rule}>{rule}</li>)
+            )}
+          </ul>
+          <button
+            type="button"
+            className="mt-2 border px-2"
+            onClick={() => setCleared(null)}
+          >
+            Dismiss
+          </button>
+        </section>
+      ) : null}
 
       {session.versions.length > 0 ? (
         <section aria-labelledby="versions-heading" className="mt-6">

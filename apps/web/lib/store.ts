@@ -159,7 +159,6 @@ export const useWebStore = create<WebStore>()((set, get) => ({
   dryRun: (constraints, options = {}) =>
     solveRoster({ ...get().session.model, constraints }, solverBackend, {
       ledger: get().session.ledger,
-      timeLimitMs: DEFAULT_TIME_LIMIT_MS,
       explain: false,
       ...options,
     }),
@@ -312,8 +311,13 @@ function startPersisting(): void {
 
 let booted: Promise<void> | undefined;
 
-/** Who the staff view signs you in as before you pick somebody else. */
-const DEFAULT_ACTOR: StaffId = 'S7';
+/**
+ * Who the staff view signs you in as before you pick somebody else.
+ *
+ * A keyholder with a full week: nights, a weekend, and a Friday they cannot work. Every
+ * question the staff surface can ask has something to bite on from here.
+ */
+const DEFAULT_ACTOR: StaffId = 'S5';
 
 /**
  * Gives the staff surface something to be about.

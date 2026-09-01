@@ -139,6 +139,15 @@ export default function ModelContextBridge() {
 
     let signature = '';
     let syncing = Promise.resolve();
+    /**
+     * Nothing registers until the week is settled.
+     *
+     * The store moves several times while it loads — signing in, solving, publishing —
+     * and a subscriber that acted on those intermediate states would register a surface
+     * that was true for a few milliseconds and then wasn't. An agent reading it in that
+     * window gets a tool that cannot answer.
+     */
+    let accepting = false;
 
     const sync = (): Promise<void> => {
       syncing = syncing.then(async () => {
@@ -165,12 +174,14 @@ export default function ModelContextBridge() {
       if (isWebMcpSupported()) aboutRegistered = await registerAbout(controller.signal);
 
       signature = toolSignature();
+      accepting = true;
       await sync();
 
       if (!disposed) window.__ROTAPROOF_READY__ = true;
     })();
 
     const unsubscribe = useWebStore.subscribe(() => {
+      if (!accepting) return;
       const next = toolSignature();
       if (next === signature) return;
       signature = next;

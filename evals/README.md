@@ -47,13 +47,19 @@ Chrome needs WebMCP switched on either way:
 --enable-features=WebMCPTesting --enable-blink-features=WebMCP
 ```
 
-## Two honest notes
+## Three honest notes
 
 **`publish_roster`, `offer_swap` and `accept_swap` are absent from these suites.** They
 block until a person clicks a confirmation in the page, and there is nobody to click
 during an eval run. Adding a bypass so they could be scored would defeat the mechanism
 they exist to demonstrate. They are covered instead by `tests/webmcp.harness.mjs`, which
 drives real Chrome and does click.
+
+**Two staff cases are coupled to the seeded optimum.** `find_swap` can only be asked about a
+shift the signed-in person actually holds, so those cases name days that the seeded week's
+optimal roster gives to S6. If the seed or the objective changes, the optimum can move and
+those two cases have to move with it. The alternative — asking about a shift the person
+might not have — would test the error path rather than the feature.
 
 **Every case starts from the seeded week.** Each eval case gets a fresh page, so a
 trajectory that needs the roster in a particular state has to put it there itself — which

@@ -16,12 +16,6 @@
     "paths": {
       "@/*": [
         "./*"
-      ],
-      "@rotaproof/core": [
-        "../../packages/core/src/index.ts"
-      ],
-      "@rotaproof/registry": [
-        "../../packages/registry/src/index.ts"
       ]
     }
   },

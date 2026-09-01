@@ -129,7 +129,7 @@
       {
         "role": "user",
         "type": "message",
-        "content": "Check what I'm on, then see if anyone can take my Saturday."
+        "content": "Check what I'm on, then see if anyone can take my Saturday morning."
       }
     ],
     "expectedCall": [
@@ -141,9 +141,7 @@
         "functionName": "find_swap",
         "arguments": {
           "day": 5,
-          "shift": {
-            "$type": "string"
-          }
+          "shift": "open"
         }
       }
     ]
@@ -186,17 +184,15 @@
       {
         "role": "user",
         "type": "message",
-        "content": "I'd love to get rid of my Friday. Just tell me who could take it - don't agree anything yet."
+        "content": "I'd love to get rid of my Thursday night. Just tell me who could take it - don't agree anything yet."
       }
     ],
     "expectedCall": [
       {
         "functionName": "find_swap",
         "arguments": {
-          "day": 4,
-          "shift": {
-            "$type": "string"
-          }
+          "day": 3,
+          "shift": "close"
         }
       }
     ]
