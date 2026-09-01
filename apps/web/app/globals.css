@@ -1,0 +1,25 @@
+@import 'tailwindcss';
+
+/*
+ * Deliberately thin. The markup carries the structure and a later pass carries the look;
+ * what is here is the part that is not decoration — a visible focus ring, and defaults
+ * that keep the page readable before any of it is styled.
+ */
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  line-height: 1.5;
+}
+
+:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+table {
+  border-collapse: collapse;
+}
