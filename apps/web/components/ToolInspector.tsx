@@ -239,8 +239,9 @@ export default function ToolInspector() {
           </p>
         </div>
 
+        {/* The picker and its trigger sit together; the arguments get the full measure. */}
         <div className="fieldrow">
-          <p className="field">
+          <p className="field grow">
             <label htmlFor="tool-select">Tool</label>
             <select
               id="tool-select"
@@ -256,20 +257,6 @@ export default function ToolInspector() {
             </select>
           </p>
 
-          <p className="field grow">
-            <label htmlFor="tool-args">Arguments (JSON)</label>
-            <textarea
-              id="tool-args"
-              className="control"
-              rows={4}
-              spellCheck={false}
-              value={args}
-              onChange={(event) => setArgs(event.target.value)}
-            />
-          </p>
-        </div>
-
-        <div className="btnrow gap-top">
           <button
             id="run-tool"
             type="button"
@@ -280,6 +267,18 @@ export default function ToolInspector() {
             {running ? 'Running…' : 'Run'}
           </button>
         </div>
+
+        <p className="field gap-top">
+          <label htmlFor="tool-args">Arguments (JSON)</label>
+          <textarea
+            id="tool-args"
+            className="control"
+            rows={4}
+            spellCheck={false}
+            value={args}
+            onChange={(event) => setArgs(event.target.value)}
+          />
+        </p>
 
         <pre id="tool-output" ref={outputRef} aria-live="polite" className="well gap-top">
           {output || 'Nothing run yet.'}

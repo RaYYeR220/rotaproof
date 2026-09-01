@@ -56,7 +56,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="shell">
           <SiteNav />
 
-          <main id="main">{children}</main>
+          <main id="main" tabIndex={-1}>
+            {children}
+          </main>
 
           {/* Both live in the layout: an agent can call a tool while the human is anywhere. */}
           <AgentActivity />

@@ -39,13 +39,15 @@
    * The three accents are tuned for MARKS on putty, not for words. Sage in
    * particular lands at 3.82:1 on the ground, which is fine for a dot and not
    * fine for a label. These darker siblings are what any accent-coloured TEXT
-   * uses: plum-ink 6.8:1, sage-ink 6.1:1, clay-ink 6.0:1, all on the ground.
-   * In dark mode the given accents already clear 5.9:1, so they alias straight
-   * through and the palette stays the one the study specified.
+   * uses. Measured against the ground: plum-ink 6.8:1, sage-ink 6.1:1,
+   * clay-ink 7.1:1 — clay-ink carries an actual sentence in the conflict panel,
+   * so it is tuned past 7:1 rather than merely past AA. In dark mode the given
+   * accents already clear 5.9:1 and alias straight through, except clay for the
+   * same reason.
    */
   --plum-ink: #5a4260;
   --sage-ink: #2f5a44;
-  --clay-ink: #8e3623;
+  --clay-ink: #7a2c1b;
 
   --sans: var(--font-outfit), system-ui, -apple-system, 'Segoe UI', 'Helvetica Neue', sans-serif;
   --mono: var(--font-mono-face), ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -81,7 +83,8 @@
 
     --plum-ink: var(--plum);
     --sage-ink: var(--sage);
-    --clay-ink: var(--clay);
+    /* A touch lighter than the clay mark, so the one accent-coloured sentence clears 7:1. */
+    --clay-ink: #e89a85;
 
     color-scheme: dark;
   }
@@ -200,6 +203,10 @@ textarea {
   text-decoration: none;
 }
 
+#main:focus {
+  outline: none;
+}
+
 .shell {
   max-width: 1180px;
   margin: 0 auto;
@@ -270,16 +277,48 @@ textarea {
   transform: translateY(-1px);
 }
 
-/* The page you are on is the switch that is pressed. */
+/*
+ * The page you are on is the switch that is pressed. The recess and the weight carry
+ * that on their own — tinting it as well spent plum, which means "the agent" everywhere
+ * else here, and cost the label two points of contrast for nothing.
+ */
 .navpill[aria-current='page'] {
   background: var(--ground);
   box-shadow: var(--in-sm);
   font-weight: 600;
   transform: none;
-  color: var(--plum-ink);
 }
 
 /* ── module shell ───────────────────────────────────────────────────────── */
+
+/*
+ * Pairs two modules across the measure. Used where the content is genuinely short —
+ * a stack of 1180px-wide bars holding one line each reads as a page that failed to
+ * load, however well the bars themselves are made.
+ */
+.duo {
+  display: grid;
+  gap: 26px;
+  grid-template-columns: 1fr 1fr;
+  margin-bottom: 26px;
+  align-items: start;
+}
+
+.duo--aside {
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+}
+
+.duo > .mod {
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .duo,
+  .duo--aside {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 22px;
+  }
+}
 
 .mod {
   border-radius: var(--r-mod);
@@ -469,6 +508,23 @@ textarea.control {
   margin-bottom: 20px;
 }
 
+/* A band whose only payload is one control puts it on the header line, not under it. */
+.band-head {
+  align-items: center;
+  margin-bottom: 0;
+}
+
+.field--inline {
+  min-width: 250px;
+}
+
+@media (max-width: 720px) {
+  .field--inline {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
 .solve-line {
   display: flex;
   flex-wrap: wrap;
@@ -552,7 +608,8 @@ textarea.control {
 .verdict-lead {
   font: 300 clamp(25px, 3.6vw, 40px) / 1.14 var(--sans);
   letter-spacing: -0.025em;
-  max-width: 21ch;
+  max-width: 24ch;
+  text-wrap: balance;
 }
 
 .verdict-rest {
@@ -709,7 +766,8 @@ textarea.control {
 .judge p {
   font: 300 clamp(23px, 3.6vw, 38px) / 1.16 var(--sans);
   letter-spacing: -0.02em;
-  max-width: 20ch;
+  max-width: 22ch;
+  text-wrap: balance;
 }
 
 .judge .seam {
@@ -1154,6 +1212,10 @@ textarea.control {
 }
 
 .dialog-kicker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
   font: 600 10.5px/1.3 var(--sans);
   letter-spacing: 0.18em;
   text-transform: uppercase;
@@ -1161,10 +1223,18 @@ textarea.control {
   margin-bottom: 12px;
 }
 
+.dialog-kicker .tool {
+  font: 400 12px/1.3 var(--mono);
+  letter-spacing: -0.01em;
+  text-transform: none;
+  color: var(--ink);
+}
+
 .dialog h2 {
   font: 300 clamp(24px, 4vw, 31px) / 1.2 var(--sans);
   letter-spacing: -0.02em;
   margin-bottom: 8px;
+  text-wrap: balance;
 }
 
 .dialog .sub {
@@ -1234,7 +1304,8 @@ textarea.control {
 .claim p {
   font: 300 clamp(21px, 3vw, 31px) / 1.2 var(--sans);
   letter-spacing: -0.02em;
-  max-width: 22ch;
+  max-width: 24ch;
+  text-wrap: balance;
 }
 
 .claim .seam {

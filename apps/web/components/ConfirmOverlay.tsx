@@ -38,14 +38,41 @@ export default function ConfirmOverlay() {
   useEffect(() => {
     if (!pendingId) return;
 
-    returnTo.current = document.activeElement as HTMLElement | null;
+    /*
+     * Capture the opener, but never the body. A button that opens this card disables
+     * itself for the duration of its own call, and disabling the focused element drops
+     * focus to the body before this effect ever runs — so `document.activeElement` is
+     * often already gone. Remembering the body would mean "return focus to nowhere".
+     */
+    const opener = document.activeElement;
+    returnTo.current =
+      opener && opener !== document.body && opener !== document.documentElement
+        ? (opener as HTMLElement)
+        : null;
+
     approveRef.current?.focus();
 
     return () => {
-      // Focus goes back where it came from, unless that element has since left the page.
       const target = returnTo.current;
       returnTo.current = null;
-      if (target && target.isConnected) target.focus();
+
+      /* Focus must land somewhere real; the top of the main region is the honest floor. */
+      const fallback = () => document.getElementById('main')?.focus();
+      if (!target) return fallback();
+
+      /*
+       * The opener may still be mid-action when the card closes, and focusing a disabled
+       * control silently drops focus onto the body — the exact thing returning focus is
+       * meant to prevent. Wait for it to come back before handing over.
+       */
+      let frames = 0;
+      const hand = () => {
+        if (!target.isConnected) return fallback();
+        if (!(target as HTMLButtonElement).disabled) return void target.focus();
+        if (frames++ < 60) requestAnimationFrame(hand);
+        else fallback();
+      };
+      hand();
     };
   }, [pendingId]);
 
@@ -101,7 +128,8 @@ export default function ConfirmOverlay() {
         className="dialog"
       >
         <p className="dialog-kicker">
-          {toolName ? `Waiting on you — ${toolName}` : 'Waiting on you'}
+          <span>Waiting on you</span>
+          {toolName ? <span className="tool">{toolName}</span> : null}
         </p>
 
         <h2 id="hitl-title">{request.title}</h2>

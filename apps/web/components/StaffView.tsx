@@ -67,13 +67,11 @@ export default function StaffView() {
     <div>
       {/* ── who is at the counter ────────────────────────────────────────── */}
       <section aria-labelledby="staff-heading" className="band">
-        <div className="mod-head">
+        <div className="mod-head band-head">
           <h1 id="staff-heading">Staff</h1>
           <p className="count-tag">week of {model.horizon.startDate}</p>
-        </div>
 
-        <div className="fieldrow">
-          <p className="field">
+          <p className="field field--inline push">
             <label htmlFor="actor-picker">Signed in as</label>
             <select
               id="actor-picker"
@@ -93,8 +91,9 @@ export default function StaffView() {
         </div>
       </section>
 
-      {/* ── my shifts ────────────────────────────────────────────────────── */}
-      <section aria-labelledby="shifts-heading" className="mod">
+      <div className="duo duo--aside">
+        {/* ── my shifts ──────────────────────────────────────────────────── */}
+        <section aria-labelledby="shifts-heading" className="mod">
         <div className="mod-head">
           <h2 id="shifts-heading">My shifts</h2>
           <p className="count-tag">
@@ -128,8 +127,8 @@ export default function StaffView() {
         </ul>
       </section>
 
-      {/* ── ask about a shift ────────────────────────────────────────────── */}
-      <section aria-labelledby="ask-heading" className="mod">
+        {/* ── ask about a shift ──────────────────────────────────────────── */}
+        <section aria-labelledby="ask-heading" className="mod">
         <div className="mod-head">
           <h2 id="ask-heading">Ask about a shift</h2>
           <p className="mod-note">
@@ -217,10 +216,12 @@ export default function StaffView() {
             Offer this shift
           </button>
         </div>
-      </section>
+        </section>
+      </div>
 
-      {/* ── the swap board ───────────────────────────────────────────────── */}
-      <section aria-labelledby="swaps-heading" className="mod">
+      <div className="duo">
+        {/* ── the swap board ─────────────────────────────────────────────── */}
+        <section aria-labelledby="swaps-heading" className="mod">
         <div className="mod-head">
           <h2 id="swaps-heading">Open swaps</h2>
           <p className="count-tag">{openSwaps.length} offered</p>
@@ -263,10 +264,10 @@ export default function StaffView() {
             </button>
           </div>
         ) : null}
-      </section>
+        </section>
 
-      {/* ── the raw result ───────────────────────────────────────────────── */}
-      <section aria-labelledby="staff-output-heading" className="mod">
+        {/* ── the raw result ─────────────────────────────────────────────── */}
+        <section aria-labelledby="staff-output-heading" className="mod">
         <div className="mod-head">
           <h2 id="staff-output-heading">Last action result</h2>
           <p className="mod-note">
@@ -287,7 +288,8 @@ export default function StaffView() {
             {output.message} {output.hint}
           </p>
         ) : null}
-      </section>
+        </section>
+      </div>
 
       {/* The product claim, given the weight it earns. */}
       {staffById(model, actorId ?? '') ? (
