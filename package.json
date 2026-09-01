@@ -6,13 +6,18 @@
   "scripts": {
     "dev": "pnpm --filter @rotaproof/web dev",
     "build": "pnpm --filter @rotaproof/web build",
+    "start": "pnpm --filter @rotaproof/web start",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:webmcp": "node tests/webmcp.harness.mjs",
+    "evals": "node scripts/run-evals.mjs",
+    "verify:receipt": "node scripts/verify-receipt.mjs",
     "typecheck": "tsc -b --pretty false",
-    "lint": "next lint --dir apps/web"
+    "check": "pnpm typecheck && pnpm test && pnpm verify:receipt"
   },
   "devDependencies": {
     "@types/node": "^24.3.0",
+    "jiti": "^2.7.0",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
   },

@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Types
+        run: pnpm typecheck
+
+      - name: Tests
+        run: pnpm test
+
+      # The receipts are committed. If a change alters what the solver returns for the
+      # seeded week, this fails until the new receipts are committed alongside it — which
+      # is the point: "deterministic" should be enforced, not asserted.
+      - name: Receipts still reproduce
+        run: pnpm verify:receipt
+
+      - name: Build
+        run: pnpm build
+
+  # The browser suites need Chrome with WebMCP enabled, which is a flag on a specific
+  # channel rather than something a hosted runner provides. They are run locally against
+  # the deployed URL; see JUDGES.md. Documented here so their absence is deliberate
+  # rather than an omission.

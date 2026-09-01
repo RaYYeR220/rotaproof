@@ -1,0 +1,32 @@
+[
+  {
+    "id": "seed-week",
+    "description": "The seeded ten-person week, solved to proven optimality.",
+    "modelHash": "21944a773f1321cd92e9cf419d47556dda328a9003ce13faf7c89be813cf5dc5",
+    "canonicalLength": 8308,
+    "status": "optimal",
+    "solverVersion": "highs-wasm@1.15",
+    "objective": 28.42,
+    "scheduleHash": "156b619177ff6ad2d2312fea8f1c1b664ce700005da430c66df7938602c11daa",
+    "assignments": 42,
+    "observedMs": 263
+  },
+  {
+    "id": "friday-conflict",
+    "description": "The same week with one Friday granted off, which cannot be satisfied.",
+    "modelHash": "69b28a7b557aaaf0583bf557f58e394a6fda363bbfe68595a70bafb9ed467312",
+    "canonicalLength": 8586,
+    "status": "infeasible",
+    "solverVersion": "highs-wasm@1.15",
+    "conflictHash": "6f78eb19a4dd3560e7c9b5b3de851859eb55d2af008675c8b4de2adaa0aa2bba",
+    "conflictingRules": [
+      "C-keyholder-close",
+      "C-keyholder-open",
+      "C-rest-11",
+      "C-timeoff-S2-friday",
+      "C-unavail-S6-friday",
+      "C-unavail-S9-wedding"
+    ],
+    "observedMs": 163
+  }
+]
