@@ -13,10 +13,13 @@ import {
   type Assignment,
   type Constraint,
   type ConstraintId,
+  type FairnessLedger,
   type RosterModel,
   type Schedule,
   type Slot,
   type StaffId,
+  EMPTY_LEDGER,
+  SOFT_PENALTY_MODE,
   isNightShift,
   isWeekend,
   resolveDays,
@@ -49,6 +52,8 @@ export interface CheckResult {
   softPenalty: number;
   stats: ScheduleStats;
 }
+
+export type { FairnessLedger };
 
 export interface ScheduleStats {
   assignments: number;
@@ -94,21 +99,36 @@ class ScheduleIndex {
   }
 }
 
-export function check(model: RosterModel, schedule: Schedule): CheckResult {
+/**
+ * Checks a schedule against the model.
+ *
+ * The ledger matters for one thing only: fairness compares the busiest person to the
+ * quietest, and if previous weeks are being carried then the comparison has to include
+ * them — otherwise this reports a different number from the one the solver minimised.
+ */
+export function check(
+  model: RosterModel,
+  schedule: Schedule,
+  ledger: FairnessLedger = EMPTY_LEDGER,
+): CheckResult {
   const index = new ScheduleIndex(schedule);
   const violations: Violation[] = [];
 
   for (const constraint of model.constraints) {
-    violations.push(...checkOne(model, constraint, index));
+    violations.push(...checkOne(model, constraint, index, ledger));
   }
 
   const hardViolations = violations.filter((v) => v.hardness === 'hard');
   const softViolations = violations.filter((v) => v.hardness === 'soft');
   const weightOf = new Map(model.constraints.map((c) => [c.id, c.weight ?? 1]));
-  const softPenalty = softViolations.reduce(
-    (sum, v) => sum + (weightOf.get(v.constraintId) ?? 1) * (v.overBy ?? 1),
-    0,
-  );
+
+  // Priced exactly the way the compiler prices it, so "objective" and "soft cost" are the
+  // same quantity rather than two plausible ones. See SOFT_PENALTY_MODE.
+  const softPenalty = softViolations.reduce((sum, v) => {
+    const weight = weightOf.get(v.constraintId) ?? 1;
+    const units = SOFT_PENALTY_MODE[v.kind] === 'magnitude' ? (v.overBy ?? 1) : 1;
+    return sum + weight * units;
+  }, 0);
 
   return {
     ok: hardViolations.length === 0,
@@ -124,6 +144,7 @@ export function checkOne(
   model: RosterModel,
   constraint: Constraint,
   index: ScheduleIndex,
+  ledger: FairnessLedger = EMPTY_LEDGER,
 ): Violation[] {
   const out: Violation[] = [];
   const base = {
@@ -222,7 +243,7 @@ export function checkOne(
             const first = worked[i]!;
             const second = worked[j]!;
             const gap = restBetween(model, first, second);
-            if (gap === null || gap >= required) continue;
+            if (gap >= required) continue;
             out.push({
               ...base,
               message: `${staff} gets ${(gap / 60).toFixed(1)}h rest between ${slotLabel(model, first)} and ${slotLabel(model, second)}; ${constraint.hours}h required.`,
@@ -267,6 +288,21 @@ export function checkOne(
           out.push({
             ...base,
             message: `${constraint.staff} is rostered on ${slotLabel(model, slot)} but is unavailable.`,
+            staff: [constraint.staff],
+            slots: [slot],
+            overBy: 1,
+          });
+        }
+      }
+      break;
+    }
+
+    case 'must_work': {
+      for (const slot of constraint.slots) {
+        if (!index.worksSlot(constraint.staff, slot)) {
+          out.push({
+            ...base,
+            message: `${constraint.staff} is required on ${slotLabel(model, slot)} but is not rostered.`,
             staff: [constraint.staff],
             slots: [slot],
             overBy: 1,
@@ -345,12 +381,12 @@ export function checkOne(
     }
 
     case 'fairness': {
-      const spread = fairnessSpread(model, index, constraint.dimension);
-      if (spread.gap > 1) {
+      const spread = fairnessSpread(model, index, constraint.dimension, ledger);
+      if (spread.gap > 0) {
         out.push({
           ...base,
           message: `${constraint.dimension} load ranges from ${spread.min} to ${spread.max} across the team (gap ${spread.gap}).`,
-          overBy: spread.gap - 1,
+          overBy: spread.gap,
         });
       }
       break;
@@ -360,11 +396,8 @@ export function checkOne(
   return out;
 }
 
-/**
- * Minutes of rest between two assignments, or `null` when they are the same assignment
- * or overlap outright (overlap is caught by `one_shift_per_day`).
- */
-function restBetween(model: RosterModel, a: Assignment, b: Assignment): number | null {
+/** Minutes of rest between two assignments. Overlapping shifts count as zero rest. */
+function restBetween(model: RosterModel, a: Assignment, b: Assignment): number {
   const first = slotStart(model, a) <= slotStart(model, b) ? a : b;
   const second = first === a ? b : a;
   const gap = slotStart(model, second) - slotEnd(model, first);
@@ -389,8 +422,13 @@ function fairnessSpread(
   model: RosterModel,
   index: ScheduleIndex,
   dimension: 'total' | 'nights' | 'weekends',
+  ledger: FairnessLedger,
 ): { min: number; max: number; gap: number } {
-  const counts = model.staff.map((s) => countFor(model, index.forStaff(s.id), dimension));
+  const counts = model.staff.map(
+    (s) =>
+      countFor(model, index.forStaff(s.id), dimension) +
+      (ledger.history[s.id]?.[dimension] ?? 0),
+  );
   if (counts.length === 0) return { min: 0, max: 0, gap: 0 };
   const min = Math.min(...counts);
   const max = Math.max(...counts);

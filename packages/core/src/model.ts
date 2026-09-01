@@ -129,6 +129,19 @@ export interface UnavailableConstraint extends ConstraintBase {
   reason?: string;
 }
 
+/**
+ * Pins a person onto specific slots.
+ *
+ * The mirror of `unavailable`. Mostly used to ask a hypothetical — "if this person took
+ * that shift, would the week still work?" — which is a question about one named individual
+ * and cannot be expressed as a coverage floor, because a floor is satisfied by anybody.
+ */
+export interface MustWorkConstraint extends ConstraintBase {
+  kind: 'must_work';
+  staff: StaffId;
+  slots: Slot[];
+}
+
 /** Two people who must not share a shift. */
 export interface AntiPairConstraint extends ConstraintBase {
   kind: 'anti_pair';
@@ -178,6 +191,7 @@ export type Constraint =
   | MinRestConstraint
   | MaxConsecutiveConstraint
   | UnavailableConstraint
+  | MustWorkConstraint
   | AntiPairConstraint
   | PairConstraint
   | TimeOffConstraint
@@ -185,6 +199,33 @@ export type Constraint =
   | FairnessConstraint;
 
 export type ConstraintKind = Constraint['kind'];
+
+/**
+ * How a soft breach is priced.
+ *
+ * `magnitude` charges per unit past the limit — two people short of a coverage minimum
+ * costs twice one. `count` charges once per breach, because the shortfall has no natural
+ * unit: a rest period nine hours too short is one broken rule, not nine.
+ *
+ * Both the checker and the MIP compiler read this table, which is what keeps the objective
+ * the solver minimises and the soft cost the checker reports the same quantity.
+ * `objective.test.ts` asserts they agree on the seeded week.
+ */
+export const SOFT_PENALTY_MODE: Record<ConstraintKind, 'magnitude' | 'count'> = {
+  coverage: 'magnitude',
+  max_shifts: 'magnitude',
+  min_shifts: 'magnitude',
+  one_shift_per_day: 'magnitude',
+  max_consecutive_days: 'magnitude',
+  min_rest: 'count',
+  unavailable: 'count',
+  must_work: 'count',
+  time_off: 'count',
+  anti_pair: 'count',
+  pair: 'count',
+  preference: 'count',
+  fairness: 'magnitude',
+};
 
 export const CONSTRAINT_KINDS: readonly ConstraintKind[] = [
   'coverage',
@@ -194,6 +235,7 @@ export const CONSTRAINT_KINDS: readonly ConstraintKind[] = [
   'min_rest',
   'max_consecutive_days',
   'unavailable',
+  'must_work',
   'anti_pair',
   'pair',
   'time_off',

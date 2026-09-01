@@ -131,6 +131,21 @@ describe('no private data reaches an agent', () => {
         onConfirm: () => true,
       });
 
+      // Swap notes are private too, and they live in the session rather than the model.
+      // Seeding one here is what makes the sweep cover `list_swaps`, which is precisely
+      // where a note was once interpolated straight into a tool result.
+      const swapNote = token();
+      tokens.push(swapNote);
+      headless.session.swaps.push({
+        id: 'SW-seeded',
+        from: 'S3',
+        day: 5,
+        shift: 'mid',
+        status: 'open',
+        note: swapNote,
+        createdAt: new Date().toISOString(),
+      });
+
       // Reach a solved state first, then an infeasible one, so state-gated tools such as
       // explain_conflict and publish_roster are actually reachable during the sweep.
       await headless.solve();
@@ -184,9 +199,16 @@ describe('no private data reaches an agent', () => {
   it('lists every private field so nothing new escapes the sweep by being forgotten', () => {
     const { model, tokens } = tokenisedRoster();
     // `privateStrings` is what the test above trusts to know what to look for. If a new
-    // private field is added to the model and not added there, this catches it.
+    // private field is added to the model and not registered there, this catches it.
     const collected = privateStrings(model);
     for (const t of tokens) expect(collected).toContain(t);
+  });
+
+  it('accepts the private text that lives outside the model', () => {
+    const { model } = tokenisedRoster();
+    // Swap notes are written by colleagues and live in the session. They were missing from
+    // an earlier version of this sweep, which is how a leak got through.
+    expect(privateStrings(model, ['a swap note'])).toContain('a swap note');
   });
 });
 

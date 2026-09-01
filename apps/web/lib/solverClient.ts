@@ -27,7 +27,7 @@ import {
   type SolverRequest,
   type SolverResponse,
   SOLVER_VERSION,
-} from './solverProtocol.js';
+} from './solverProtocol';
 
 /** How long a polite cancel gets before the worker is killed. */
 const HARD_CANCEL_AFTER_MS = 150;

@@ -98,7 +98,16 @@ function callTool(page, name, args = {}) {
 
 /** Unwraps the `{content:[{type:'text',text}]}` envelope when one is present. */
 function payload(result) {
-  const value = result?.parsed ?? result?.raw;
+  let value = result?.parsed ?? result?.raw;
+  // executeTool always resolves with a string, so a result captured without going through
+  // callTool arrives unparsed.
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch {
+      /* a tool is allowed to return a bare string */
+    }
+  }
   if (value && typeof value === 'object' && Array.isArray(value.content)) {
     const text = value.content.find((c) => c.type === 'text')?.text;
     try {
@@ -194,6 +203,8 @@ try {
 
   // ---- the impossible week ------------------------------------------------------
   await callTool(page, 'set_constraint', {
+    // The id is given rather than generated, because the assertions below name it.
+    id: 'C-timeoff-S2-friday',
     kind: 'time_off',
     label: 'S2 asked for Friday off',
     staff: 'S2',

@@ -136,10 +136,15 @@ export function boundResult(value: unknown, hint: string): unknown {
 }
 
 /**
- * Test-only helper: collects every private string in a model so the privacy property
- * test can assert none of them survive a round trip through a tool.
+ * Collects every private string reachable from a model, plus anything else handed in.
+ *
+ * The privacy property test uses this to know what to search results for, which makes it
+ * the place a new private field has to be registered. It takes `extra` because not all
+ * private text lives in the model: a swap note is written by a colleague and lives in the
+ * session, and it was missing from an earlier version of this sweep — which is exactly how
+ * `list_swaps` came to be interpolating one straight into a tool result.
  */
-export function privateStrings(model: RosterModel): string[] {
+export function privateStrings(model: RosterModel, extra: Array<string | undefined> = []): string[] {
   const out: string[] = [];
   for (const staff of model.staff) {
     out.push(staff.name);
@@ -151,5 +156,6 @@ export function privateStrings(model: RosterModel): string[] {
     if (withText.reason) out.push(withText.reason);
     if (withText.note) out.push(withText.note);
   }
+  for (const value of extra) if (value) out.push(value);
   return out.filter((s) => s.length > 0);
 }

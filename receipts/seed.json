@@ -7,9 +7,9 @@
     "status": "optimal",
     "solverVersion": "highs-wasm@1.15",
     "objective": 28.42,
-    "scheduleHash": "156b619177ff6ad2d2312fea8f1c1b664ce700005da430c66df7938602c11daa",
+    "scheduleHash": "7b5ee86457113c212fc81d914189e332da4aa857e9fd243f724718b8fadcb741",
     "assignments": 42,
-    "observedMs": 263
+    "observedMs": 381
   },
   {
     "id": "friday-conflict",
@@ -27,6 +27,6 @@
       "C-unavail-S6-friday",
       "C-unavail-S9-wedding"
     ],
-    "observedMs": 163
+    "observedMs": 236
   }
 ]

@@ -95,10 +95,30 @@ export default function ModelContextBridge() {
     const controller = new AbortController();
     let disposed = false;
 
+    /**
+     * A sync that lands while a tool is executing is fatal to that call.
+     *
+     * Chrome 151 aborts a running `execute` when the registration it belongs to is
+     * aborted — and the first thing `solve_roster` does is set `solving`, which makes
+     * `solve_roster` itself unavailable. Left alone, every solve an agent starts is killed
+     * fifteen milliseconds in with an opaque `UnknownError`. So a sync requested while
+     * anything is in flight is held until the call is finished; the state it would have
+     * registered is exactly the state it registers a moment later.
+     */
+    let syncQueued = false;
+
     const binding = new WebMcpBinding(ALL_ACTIONS, {
       getSession: () => useWebStore.getState().session,
       makeContext: (signal) => makeActionContext(signal),
-      onEvent: (event) => useWebStore.getState().noteEvent(event),
+      onEvent: (event) => {
+        useWebStore.getState().noteEvent(event);
+        if (event.phase === 'start' || !syncQueued) return;
+        // The binding clears its in-flight entry after this callback returns, so the
+        // check has to wait for the current task to finish.
+        setTimeout(() => {
+          if (!disposed && syncQueued) void sync();
+        }, 0);
+      },
     });
 
     setToolCanceller((toolName) => binding.cancel(toolName));
@@ -120,9 +140,14 @@ export default function ModelContextBridge() {
     let signature = '';
     let syncing = Promise.resolve();
 
-    const sync = () => {
+    const sync = (): Promise<void> => {
       syncing = syncing.then(async () => {
         if (disposed) return;
+        if (binding.inFlight.length > 0) {
+          syncQueued = true;
+          return;
+        }
+        syncQueued = false;
         await binding.sync();
         publishCounts();
       });

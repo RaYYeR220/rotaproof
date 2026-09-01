@@ -12,7 +12,7 @@
  * same one the manager surface uses; the difference is only which tools exist.
  */
 
-import { type Constraint, type Schedule, check, shiftById } from '@rotaproof/core';
+import { type Constraint, type Schedule, type StaffId, check, shiftById } from '@rotaproof/core';
 
 import {
   type ActionContext,
@@ -40,36 +40,72 @@ function slotLabel(context: ActionContext, day: number, shift: string): string {
   return `day ${day} ${shiftById(context.session.model, shift)?.label ?? shift}`;
 }
 
-/** Runs the solver against a hypothetical model without disturbing the session. */
+/**
+ * The answer to a hypothetical.
+ *
+ * Three outcomes, not two. `unknown` exists because a solver that ran out of time has
+ * proved nothing, and reporting that as "cannot be done" would put words in its mouth —
+ * in a file whose whole claim is that a no is a proof.
+ */
+type Verdict =
+  | { outcome: 'possible' }
+  | { outcome: 'impossible'; blockedBy: string[]; narrative?: string }
+  | { outcome: 'unknown'; reason: string };
+
+/**
+ * Asks the solver a question about a model that is not the real one.
+ *
+ * Goes through `dryRun` rather than `solve` precisely because the session must not move:
+ * an earlier version routed probes through the real solve, so a read-only tool replaced
+ * the working schedule with a hypothetical one, and an infeasible probe deleted it.
+ */
 async function probe(
   context: ActionContext,
-  mutate: (constraints: Constraint[]) => Constraint[],
-): Promise<{ feasible: boolean; conflict?: string[]; narrative?: string }> {
-  const original = context.session.model.constraints;
-  let outcome: { feasible: boolean; conflict?: string[]; narrative?: string } = { feasible: false };
-
-  context.update((draft) => {
-    draft.model.constraints = mutate([...original]);
+  extra: Constraint[],
+  options: { explain?: boolean } = {},
+): Promise<Verdict> {
+  const result = await context.dryRun([...context.session.model.constraints, ...extra], {
+    ...(context.signal ? { signal: context.signal } : {}),
+    ...(options.explain ? { explain: true } : {}),
   });
 
-  try {
-    const options = context.signal ? { signal: context.signal } : {};
-    const result = await context.solve(options);
-    outcome =
-      result.status === 'infeasible'
-        ? {
-            feasible: false,
-            conflict: result.conflict?.constraintIds ?? [],
-            narrative: result.conflict?.narrative,
-          }
-        : { feasible: result.status === 'optimal' || result.status === 'feasible' };
-  } finally {
-    context.update((draft) => {
-      draft.model.constraints = original;
-    });
+  if (result.status === 'optimal' || result.status === 'feasible') return { outcome: 'possible' };
+  if (result.status === 'infeasible') {
+    const blocked: { outcome: 'impossible'; blockedBy: string[]; narrative?: string } = {
+      outcome: 'impossible',
+      blockedBy: result.conflict?.constraintIds ?? [],
+    };
+    if (result.conflict?.narrative) blocked.narrative = result.conflict.narrative;
+    return blocked;
   }
+  return {
+    outcome: 'unknown',
+    reason: result.message ?? `the solver returned ${result.status} rather than an answer`,
+  };
+}
 
-  return outcome;
+/** Pins one person onto one slot, which is what a swap actually asks. */
+function forceSwap(taker: StaffId, giver: StaffId, day: number, shift: string): Constraint[] {
+  return [
+    {
+      id: `probe-takes-${taker}`,
+      kind: 'must_work',
+      label: `${taker} takes the shift`,
+      hardness: 'hard',
+      group: 'probe',
+      staff: taker,
+      slots: [{ day, shift }],
+    },
+    {
+      id: `probe-releases-${giver}`,
+      kind: 'unavailable',
+      label: `${giver} is released from it`,
+      hardness: 'hard',
+      group: 'probe',
+      staff: giver,
+      slots: [{ day, shift }],
+    },
+  ];
 }
 
 // ---------------------------------------------------------------------------
@@ -165,7 +201,11 @@ export const requestTimeOff = defineAction<{ slots: { day: number; shift: string
       id,
       kind: 'time_off',
       label: `${me} asked for ${slots.value.length} slot(s) off`,
-      hardness: 'hard',
+      // Soft while it is only a request. A member of staff must not be able to make the
+      // manager's week impossible with an unapproved tool call; granting it is what turns
+      // it hard, and that is the manager's decision.
+      hardness: 'soft',
+      weight: 8,
       group: 'time-off',
       staff: me,
       slots: slots.value,
@@ -173,20 +213,36 @@ export const requestTimeOff = defineAction<{ slots: { day: number; shift: string
       ...(args.note ? { note: args.note } : {}),
     };
 
-    const verdict = await probe(context, (constraints) => [...constraints, request]);
+    // Asked as a hypothetical against a *hard* absence, because that is what granting it
+    // would mean. What gets recorded is soft: an unapproved request must not be able to
+    // make the manager's week impossible.
+    const asIfGranted: Constraint = { ...request, hardness: 'hard', status: 'granted' };
+    const verdict = await probe(context, [asIfGranted], { explain: true });
 
     context.update((draft) => {
       draft.model.constraints = [...draft.model.constraints, request];
       draft.status = 'draft';
-      draft.lastResult = undefined;
+      delete draft.lastResult;
     });
 
-    if (verdict.feasible) {
+    const slotNames = slots.value.map((s) => slotLabel(context, s.day, s.shift));
+
+    if (verdict.outcome === 'possible') {
       return {
         request: id,
         grantable: true,
         message: 'The week still works with this absence. The request is waiting for the manager.',
-        slots: slots.value.map((s) => slotLabel(context, s.day, s.shift)),
+        slots: slotNames,
+      };
+    }
+
+    if (verdict.outcome === 'unknown') {
+      return {
+        request: id,
+        grantable: 'unknown',
+        message: `The solver did not finish, so this is genuinely undecided: ${verdict.reason}.`,
+        slots: slotNames,
+        next: 'The request has been recorded. Ask the manager to run it again.',
       };
     }
 
@@ -194,7 +250,7 @@ export const requestTimeOff = defineAction<{ slots: { day: number; shift: string
       request: id,
       grantable: false,
       message: 'This absence cannot be granted as things stand — something else has to change first.',
-      blockedBy: verdict.conflict,
+      blockedBy: verdict.blockedBy,
       why: verdict.narrative,
       next: 'The manager can still grant it by relaxing one of those rules. The request has been recorded either way.',
     };
@@ -241,57 +297,34 @@ export const findSwap = defineAction<{ day: number; shift: string }, unknown>({
 
     const candidates: string[] = [];
     const rejected: string[] = [];
+    const undecided: string[] = [];
 
     for (const person of session.model.staff) {
       if (person.id === me) continue;
-      // Force the swap: this person must work it, and the asker must not.
-      const forced: Constraint[] = [
-        {
-          id: `probe-take-${person.id}`,
-          kind: 'coverage',
-          label: `${person.id} takes the shift`,
-          hardness: 'hard',
-          group: 'probe',
-          day: day.value,
-          shift: shift.value,
-          min: 1,
-        },
-        {
-          id: `probe-release-${me}`,
-          kind: 'unavailable',
-          label: `${me} released from the shift`,
-          hardness: 'hard',
-          group: 'probe',
-          staff: me,
-          slots: [{ day: day.value, shift: shift.value }],
-        },
-        {
-          id: `probe-assign-${person.id}`,
-          kind: 'min_shifts',
-          label: `${person.id} keeps their load`,
-          hardness: 'soft',
-          weight: 0,
-          staff: person.id,
-          min: 0,
-        },
-      ];
-
-      const verdict = await probe(context, (constraints) => [...constraints, ...forced]);
-      if (verdict.feasible) candidates.push(person.id);
-      else rejected.push(person.id);
+      const verdict = await probe(
+        context,
+        forceSwap(person.id, me, day.value, shift.value),
+      );
+      if (verdict.outcome === 'possible') candidates.push(person.id);
+      else if (verdict.outcome === 'impossible') rejected.push(person.id);
+      else undecided.push(person.id);
     }
 
-    return {
+    const result: Record<string, unknown> = {
       shift: slotLabel(context, day.value, shift.value),
       canTakeIt: candidates,
       cannot: rejected,
       checked: session.model.staff.length - 1,
       message:
         candidates.length > 0
-          ? 'Each of these was verified by re-solving the whole week with the swap forced in.'
+          ? 'Each of these was verified by re-solving the whole week with that person pinned to the shift.'
           : 'Nobody can take this shift without breaking a rule. The manager would have to relax something.',
-      next: candidates.length > 0 ? 'Call offer_swap to put it up for one of them.' : undefined,
     };
+    // Anyone the solver could not decide about is listed separately rather than quietly
+    // filed under "cannot" — a timeout is not a refusal.
+    if (undecided.length > 0) result.undecided = undecided;
+    if (candidates.length > 0) result.next = 'Call offer_swap to put it up for one of them.';
+    return result;
   },
 });
 
@@ -386,8 +419,11 @@ export const listSwaps = defineAction<Record<string, never>, unknown>({
     const open = context.session.swaps.filter((s) => s.status === 'open');
     return {
       open: open.length,
+      // The note stays in the page. It is written by a colleague and routinely says why
+      // they need the shift covered, which is exactly the kind of thing this roster does
+      // not hand to an agent. Whether one exists is useful; what it says is not.
       offers: open.map(
-        (s) => `${s.id} ${s.from} ${slotLabel(context, s.day, s.shift)}${s.note ? ` — "${s.note.slice(0, 80)}"` : ''}`,
+        (s) => `${s.id} ${s.from} ${slotLabel(context, s.day, s.shift)}${s.note ? ' (has a note for the team)' : ''}`,
       ),
       next: 'Call accept_swap with a swap id to take one.',
     };
@@ -426,34 +462,25 @@ export const acceptSwap = defineAction<{ swapId: string }, unknown>({
       return actionError('own_swap', 'You offered that shift yourself.', 'Someone else has to take it.');
     }
 
-    const forced: Constraint[] = [
-      {
-        id: `probe-take-${me}`,
-        kind: 'coverage',
-        label: `${me} takes the offered shift`,
-        hardness: 'hard',
-        group: 'probe',
-        day: swap.day,
-        shift: swap.shift,
-        min: 1,
-      },
-      {
-        id: `probe-release-${swap.from}`,
-        kind: 'unavailable',
-        label: `${swap.from} released`,
-        hardness: 'hard',
-        group: 'probe',
-        staff: swap.from,
-        slots: [{ day: swap.day, shift: swap.shift }],
-      },
-    ];
+    const verdict = await probe(
+      context,
+      forceSwap(me, swap.from, swap.day, swap.shift),
+      { explain: true },
+    );
 
-    const verdict = await probe(context, (constraints) => [...constraints, ...forced]);
-    if (!verdict.feasible) {
+    if (verdict.outcome === 'unknown') {
+      return {
+        status: 'undecided',
+        message: `The solver did not finish, so this was not accepted: ${verdict.reason}.`,
+        next: 'Try again, or ask the manager to look at it.',
+      };
+    }
+
+    if (verdict.outcome === 'impossible') {
       return {
         status: 'refused',
         message: 'Taking this shift would break the roster, so it was not accepted.',
-        blockedBy: verdict.conflict,
+        blockedBy: verdict.blockedBy,
         why: verdict.narrative,
         next: 'Call find_swap on your own shifts to see what is actually possible.',
       };

@@ -26,8 +26,8 @@ import type {
 } from '@rotaproof/registry';
 import { create } from 'zustand';
 
-import { clearStoredSessions, loadSession, saveSession } from './persist.js';
-import { explainInWorker, solverBackend, warmSolver } from './solverClient.js';
+import { clearStoredSessions, loadSession, saveSession } from './persist';
+import { explainInWorker, solverBackend, warmSolver } from './solverClient';
 
 export const DEFAULT_TIME_LIMIT_MS = 10_000;
 
@@ -61,6 +61,7 @@ interface WebStore {
 
   update: ActionContext['update'];
   solve: ActionContext['solve'];
+  dryRun: ActionContext['dryRun'];
   confirm: ActionContext['confirm'];
   answerConfirm: (id: string, approved: boolean) => void;
   cancelConfirm: (id: string) => void;
@@ -147,6 +148,21 @@ export const useWebStore = create<WebStore>()((set, get) => ({
       set((state) => ({ session: { ...state.session, solving: false } }));
     }
   },
+
+  /**
+   * Answers a hypothetical without touching the week.
+   *
+   * "Could this person take that shift?" is decided by solving a model that is not the
+   * real one, so none of it is written back: the working schedule survives the question,
+   * and an infeasible probe does not erase it.
+   */
+  dryRun: (constraints, options = {}) =>
+    solveRoster({ ...get().session.model, constraints }, solverBackend, {
+      ledger: get().session.ledger,
+      timeLimitMs: DEFAULT_TIME_LIMIT_MS,
+      explain: false,
+      ...options,
+    }),
 
   /**
    * The human-in-the-loop primitive. The promise is what the agent's tool call is waiting
@@ -247,6 +263,7 @@ export function makeActionContext(signal?: AbortSignal): ActionContext {
     },
     update: store.update,
     solve: store.solve,
+    dryRun: store.dryRun,
     confirm: store.confirm,
     ...(signal ? { signal } : {}),
   };
@@ -295,6 +312,63 @@ function startPersisting(): void {
 
 let booted: Promise<void> | undefined;
 
+/** Who the staff view signs you in as before you pick somebody else. */
+const DEFAULT_ACTOR: StaffId = 'S7';
+
+/**
+ * Gives the staff surface something to be about.
+ *
+ * A staff member looking at an unsolved week has nothing to ask: no shifts to read, no
+ * shift to offer, nothing to swap. So the first visit lands on a published week and a swap
+ * board with one offer on it. The week is solved here rather than shipped as a constant, so
+ * it is always the roster the current rules actually produce.
+ */
+async function seedStaffSession(): Promise<void> {
+  const store = useWebStore.getState();
+  if (!store.session.actorId) store.signInAs(DEFAULT_ACTOR);
+
+  if (useWebStore.getState().session.versions.length === 0) {
+    const result = await store.solve();
+    const schedule = result.schedule;
+    if (!schedule || schedule.length === 0) return;
+
+    store.update((draft) => {
+      draft.versions = [
+        {
+          version: 1,
+          schedule: [...schedule],
+          receipt: result.receipt,
+          publishedAt: new Date().toISOString(),
+          added: schedule.length,
+          removed: 0,
+        },
+      ];
+      draft.status = 'published';
+    });
+  }
+
+  const session = useWebStore.getState().session;
+  if (session.swaps.length > 0) return;
+
+  const published = session.versions.at(-1)?.schedule ?? session.schedule ?? [];
+  const offered = published.find((assignment) => assignment.staff !== session.actorId);
+  if (!offered) return;
+
+  store.update((draft) => {
+    draft.swaps = [
+      {
+        id: 'SW-seed',
+        from: offered.staff,
+        day: offered.day,
+        shift: offered.shift,
+        status: 'open',
+        note: 'Swapping this one if anybody wants it.',
+        createdAt: new Date().toISOString(),
+      },
+    ];
+  });
+}
+
 /**
  * Reads the stored week back and starts the solver warming.
  *
@@ -309,22 +383,25 @@ export function bootSession(): Promise<void> {
     const role = roleForPath(window.location.pathname);
     const reset = new URLSearchParams(window.location.search).get('reset') === '1';
 
-    if (reset) {
-      await clearStoredSessions();
-      useWebStore.setState({ session: freshSession(role), hydrated: true });
-    } else {
-      const stored = await loadSession(role);
-      useWebStore.setState({
-        session: stored ? { ...stored, role, solving: false } : freshSession(role),
-        hydrated: true,
-      });
-    }
+    if (reset) await clearStoredSessions();
+
+    // Records are kept per role, but a staff member with no record of their own should see
+    // the week the manager published rather than a blank one, so the manager's record is
+    // the fallback. It is not symmetric: the manager's week is the source.
+    const stored = reset
+      ? undefined
+      : ((await loadSession(role)) ?? (role === 'staff' ? await loadSession('manager') : undefined));
+
+    useWebStore.setState({
+      session: stored ? { ...stored, role, solving: false } : freshSession(role),
+      hydrated: true,
+    });
 
     startPersisting();
 
-    // Deliberately not awaited: the seeded week renders immediately, and the Solve button
-    // says so until the WebAssembly module has compiled.
-    void warmSolver().then(
+    // Deliberately not awaited on the manager side: the seeded week renders immediately,
+    // and the Solve button says so until the WebAssembly module has compiled.
+    const warming = warmSolver().then(
       (info) => useWebStore.setState({ solverStatus: 'ready', solverWarmupMs: info.warmupMs }),
       (error: unknown) =>
         useWebStore.setState({
@@ -332,6 +409,18 @@ export function bootSession(): Promise<void> {
           solverError: error instanceof Error ? error.message : String(error),
         }),
     );
+
+    if (role === 'staff') {
+      // The staff surface is the exception: which of its tools exist depends on having a
+      // roster, so the week is settled before anything is registered.
+      await warming;
+      try {
+        await seedStaffSession();
+      } catch {
+        // A solver that cannot start leaves the staff view empty rather than broken; the
+        // page already reports the failure.
+      }
+    }
   })();
 
   return booted;

@@ -74,6 +74,15 @@ export interface ConflictSuggestion {
   label: string;
   /** Agent-safe description of what changes if this rule is dropped or loosened. */
   effect: string;
+  /**
+   * Whether relaxing *only* this rule makes the real roster solvable.
+   *
+   * The conflict set is minimal within itself, which is weaker than it sounds: a rule can
+   * be load-bearing for this clash and still leave a second, independent one behind when
+   * it goes. Telling a manager to relax it and watching the week fail again is the worst
+   * outcome this product has, so every option is tested against the whole model.
+   */
+  sufficient: boolean;
 }
 
 export interface ConflictExplanation {
@@ -83,8 +92,14 @@ export interface ConflictExplanation {
   /** One sentence a human can read out loud. */
   narrative: string;
   suggestions: ConflictSuggestion[];
-  /** Solves spent finding it — quoted in the UI so the cost of "why not?" is visible. */
+  /** Solves spent finding it, quoted in the UI so the cost of "why not?" is visible. */
   probes: number;
+  /**
+   * Probes that neither proved nor disproved anything: a timeout, a solver error or a
+   * cancellation. Anything above zero means the set is an upper bound rather than a proof,
+   * and the narrative says so instead of claiming a minimality it cannot support.
+   */
+  inconclusive: number;
   wallMs: number;
 }
 
@@ -234,82 +249,141 @@ export async function explainConflict(
 
   const hard = model.constraints.filter((c) => c.hardness === 'hard');
   let probes = 0;
+  let inconclusive = 0;
+
+  /** Solves a trial model, counting anything that is not a clean verdict. */
+  const decide = async (trial: RosterModel): Promise<'infeasible' | 'solvable' | 'unknown'> => {
+    probes++;
+    // A backend can throw rather than return: an LP parse error surfaces as an exception,
+    // not a status.
+    let outcome: BackendResult;
+    try {
+      outcome = await backend.solve(trial, probeOptions);
+    } catch {
+      inconclusive++;
+      return 'unknown';
+    }
+    if (outcome.status === 'infeasible') return 'infeasible';
+    if (outcome.status === 'optimal' || outcome.status === 'feasible') return 'solvable';
+    // A timeout proves nothing either way.
+    inconclusive++;
+    return 'unknown';
+  };
+
+  /** Group key for a constraint that is still a candidate; unique per constraint otherwise. */
+  const groupOf = (c: Constraint) => c.group ?? c.id;
 
   /** Runs one deletion-filter pass over `candidates`, keyed by `keyOf`. */
   const filter = async <T>(
     candidates: T[],
     keyOf: (candidate: T) => string,
-    memberOf: (constraint: Constraint) => string,
+    memberOf: (constraint: Constraint) => string | undefined,
   ): Promise<Set<string>> => {
     const suspects = new Set(candidates.map(keyOf));
     for (const key of [...suspects]) {
-      if (options.signal?.aborted) break;
+      if (options.signal?.aborted) {
+        // Everything not yet examined stays in, and the caller is told the answer is
+        // incomplete rather than handed a short list that looks like a proof.
+        inconclusive++;
+        break;
+      }
       const trial: RosterModel = {
         ...model,
         constraints: model.constraints.filter((c) => {
           if (c.hardness !== 'hard') return true;
           const member = memberOf(c);
-          return suspects.has(member) && member !== key;
+          return member !== undefined && suspects.has(member) && member !== key;
         }),
       };
-      probes++;
-      // A backend can throw rather than return — an LP parse error surfaces as an
-      // exception, not a status. A probe that fails to run tells us nothing, so the
-      // candidate stays in the suspect set: the answer is then broader than necessary
-      // but never wrong, which is the right way round for a proof.
-      let outcome: BackendResult;
-      try {
-        outcome = await backend.solve(trial, probeOptions);
-      } catch {
-        continue;
-      }
-      // Still impossible without it, so it was not the cause. Leave it out for good.
-      // Anything other than a clean infeasible verdict — a timeout, an error — is
-      // treated as "cannot rule this one out", which keeps the answer sound if broad.
-      if (outcome.status === 'infeasible') suspects.delete(key);
+      // Still impossible without it, so it was not the cause: leave it out for good.
+      // Anything inconclusive keeps the candidate in, so the answer comes out broader than
+      // necessary rather than wrong, which is the right way round for a proof.
+      if ((await decide(trial)) === 'infeasible') suspects.delete(key);
     }
     return suspects;
   };
 
-  const groupOf = (c: Constraint) => c.group ?? c.id;
   const survivingGroups = await filter([...new Set(hard.map(groupOf))], (g) => g, groupOf);
 
-  // Second pass: only the rules inside the groups that survived are still candidates,
-  // and each is now tested on its own.
+  // Second pass: only the rules inside the groups that survived are still candidates, and
+  // each is now tested on its own. Constraints from groups that were ruled out map to
+  // undefined, which excludes them from every trial rather than letting them back in.
   const narrowed = hard.filter((c) => survivingGroups.has(groupOf(c)));
   const survivingIds = await filter(
     narrowed,
     (c) => c.id,
-    (c) => (survivingGroups.has(groupOf(c)) ? c.id : ' never'),
+    (c) => (survivingGroups.has(groupOf(c)) ? c.id : undefined),
   );
 
   const involved = narrowed.filter((c) => survivingIds.has(c.id));
   const groups = [...new Set(involved.map(groupOf))];
 
+  // Third pass, and the one that makes the advice safe to follow. Minimality *within* the
+  // reported set does not mean dropping a member fixes the *real* roster: another rule
+  // outside the set can independently block the same thing. Each option is therefore tried
+  // against the whole model, so the page never tells somebody to relax a rule that will
+  // leave them exactly where they started.
+  const suggestions: ConflictSuggestion[] = [];
+  for (const constraint of involved) {
+    const withoutIt: RosterModel = {
+      ...model,
+      constraints: model.constraints.filter((c) => c.id !== constraint.id),
+    };
+    const verdict = options.signal?.aborted ? 'unknown' : await decide(withoutIt);
+    suggestions.push({ ...suggest(constraint), sufficient: verdict === 'solvable' });
+  }
+
   return {
     constraintIds: involved.map((c) => c.id),
     groups,
-    narrative: narrate(involved, groups),
-    suggestions: involved.map(suggest),
+    narrative: narrate(involved, groups, suggestions, inconclusive),
+    suggestions,
     probes,
+    inconclusive,
     wallMs: now() - started,
   };
 }
 
-function narrate(involved: Constraint[], groups: string[]): string {
+function narrate(
+  involved: Constraint[],
+  groups: string[],
+  suggestions: ConflictSuggestion[],
+  inconclusive: number,
+): string {
   if (involved.length === 0) {
-    return 'The roster is impossible, but no single group of rules explains it — this usually means a constraint references staff or shifts that do not exist.';
+    return 'The roster is impossible, but no single group of rules explains it. That usually means a constraint references staff or shifts that do not exist.';
   }
+
+  // An unfinished probe means the set could not be narrowed all the way. Saying so is the
+  // difference between a proof and a shrug, and a reader is entitled to know which one
+  // they are holding.
+  const caveat =
+    inconclusive > 0
+      ? ` ${inconclusive} check${inconclusive === 1 ? '' : 's'} did not finish, so this list may be wider than it needs to be.`
+      : '';
+
   if (involved.length === 1) {
-    return `"${involved[0]!.label}" cannot be satisfied on its own.`;
+    return `"${involved[0]!.label}" cannot be satisfied on its own.${caveat}`;
   }
+
   const labels = involved.map((c) => `"${c.label}"`);
   const last = labels.pop();
   const groupNote = groups.length > 1 ? ` (${groups.join(', ')})` : '';
-  return `These rules cannot all hold at once${groupNote}: ${labels.join(', ')} and ${last}. Every one of them is needed for the clash — drop any single one and the rest fit.`;
+  const opening = `These rules cannot all hold at once${groupNote}: ${labels.join(', ')} and ${last}.`;
+
+  if (inconclusive > 0) return `${opening} Every one of them is part of the clash.${caveat}`;
+
+  const enough = suggestions.filter((option) => option.sufficient).length;
+  if (enough === suggestions.length) {
+    return `${opening} Every one of them is needed for the clash, and relaxing any single one makes the week work.`;
+  }
+  if (enough === 0) {
+    return `${opening} Every one is needed, but none of them is enough on its own: another rule blocks the same thing, so more than one will have to give.`;
+  }
+  return `${opening} Every one of them is needed for the clash, and ${enough} of the ${suggestions.length} would be enough alone. The rest leave a second blocker behind.`;
 }
 
-function suggest(constraint: Constraint): ConflictSuggestion {
+function suggest(constraint: Constraint): Omit<ConflictSuggestion, 'sufficient'> {
   const base = { constraintId: constraint.id, label: constraint.label };
   switch (constraint.kind) {
     case 'coverage':
@@ -327,6 +401,8 @@ function suggest(constraint: Constraint): ConflictSuggestion {
       return { ...base, effect: `Allow more than ${constraint.max} consecutive days.` };
     case 'unavailable':
       return { ...base, effect: `Ask ${constraint.staff} whether any of these ${constraint.slots.length} slots can open up.` };
+    case 'must_work':
+      return { ...base, effect: `Stop requiring ${constraint.staff} on those ${constraint.slots.length} slots.` };
     case 'time_off':
       return { ...base, effect: `Decline or shorten ${constraint.staff}'s time-off request.` };
     case 'one_shift_per_day':

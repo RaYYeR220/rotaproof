@@ -25,7 +25,7 @@ import {
   explainConflict,
 } from '@rotaproof/core';
 
-import { type SolverMessage, type SolverRequest, SOLVER_VERSION } from './solverProtocol.js';
+import { type SolverMessage, type SolverRequest, SOLVER_VERSION } from './solverProtocol';
 
 /**
  * Typed by hand rather than through `lib.webworker`, whose globals collide with the DOM

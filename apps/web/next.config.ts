@@ -9,15 +9,33 @@ import type { NextConfig } from 'next';
  */
 const ORIGIN_TRIAL_TOKEN = process.env.WEBMCP_ORIGIN_TRIAL_TOKEN;
 
+/** Nothing above this directory is compiled, and pnpm links `next` from the store here. */
+const workspaceRoot = path.resolve(import.meta.dirname, '../..');
+
 const nextConfig: NextConfig = {
   // The workspace packages ship raw TypeScript from `src/`, so Next has to compile them.
   transpilePackages: ['@rotaproof/core', '@rotaproof/registry'],
 
-  // Turbopack walks up looking for a lockfile and in a monorepo can latch onto the wrong
-  // directory, which breaks file tracing. Pinning the root removes the guess.
-  turbopack: { root: path.resolve(process.cwd()) },
+  // Turbopack walks up looking for a lockfile and can latch onto the wrong directory,
+  // which breaks file tracing. The root has to be the workspace root rather than this
+  // package: pnpm links `next` from the store above, and nothing outside the root is
+  // compiled.
+  turbopack: {
+    root: workspaceRoot,
+    rules: {
+      '**/packages/*/src/**/*.ts': {
+        loaders: [path.join(import.meta.dirname, 'scripts', 'workspace-esm-loader.cjs')],
+        as: '*.ts',
+      },
+    },
+  },
 
   reactStrictMode: true,
+
+  // Next writes its own AGENTS.md and CLAUDE.md into the package on every run. The repo
+  // already has orientation for both, written for this project rather than for the
+  // framework, so the generated pair is turned off rather than left to overwrite it.
+  agentRules: false,
 
   async headers() {
     return [

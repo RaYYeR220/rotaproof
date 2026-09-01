@@ -21,6 +21,7 @@ import {
   type StaffId,
   EMPTY_LEDGER,
   allSlots,
+  SOFT_PENALTY_MODE,
   isNightShift,
   isWeekend,
   resolveDays,
@@ -79,6 +80,54 @@ export function compileRoster(model: RosterModel, options: CompileOptions = {}):
     if (!feasibilityOnly) builder.addObjective(name, weight);
   };
 
+  /**
+   * A penalty variable for a soft rule.
+   *
+   * Rules whose breach has a natural size - two people short, three days over - get a
+   * continuous variable measuring it. Rules whose breach does not get a binary indicator.
+   * `SOFT_PENALTY_MODE` records which is which, and the checker reads the same table, so
+   * the objective and the reported soft cost end up being the same number.
+   */
+  const slack = (constraint: Constraint, suffix: string | number, upperBound: number): string => {
+    const name = lpName('pen', constraint.id, suffix);
+    const indicator = SOFT_PENALTY_MODE[constraint.kind] === 'count';
+    builder.variable(name, indicator ? 'binary' : 'continuous', 0, indicator ? 1 : upperBound);
+    penalty(name, constraint.weight ?? 1);
+    return name;
+  };
+
+  /**
+   * A binary that is 1 whenever the person works anything that day.
+   *
+   * Only `max_consecutive_days` needs it, and only because the checker counts *days* in a
+   * run while the obvious compilation counts *shifts*. Without it the two disagree the
+   * moment somebody could work twice in a day, and the solver reports "no schedule exists"
+   * for a week the checker is perfectly happy with.
+   */
+  const dayWorkedVars = new Map<string, string>();
+  const dayWorked = (staff: StaffId, day: number): string => {
+    const key = `${staff}:${day}`;
+    const existing = dayWorkedVars.get(key);
+    if (existing) return existing;
+
+    const name = lpName('works', staff, `d${day}`);
+    builder.variable(name, 'binary');
+    for (const shift of model.shiftTypes) {
+      // x <= worked, so any shift that day forces the day flag on. Nothing rewards the
+      // flag, so the solver leaves it at zero otherwise.
+      builder.row(
+        [
+          [varFor(staff, { day, shift: shift.id }), 1],
+          [name, -1],
+        ],
+        '<=',
+        0,
+      );
+    }
+    dayWorkedVars.set(key, name);
+    return name;
+  };
+
   for (const constraint of model.constraints) {
     const hard = constraint.hardness === 'hard';
     const weight = constraint.weight ?? 1;
@@ -101,10 +150,14 @@ export function compileRoster(model: RosterModel, options: CompileOptions = {}):
             }
           } else {
             // Measure the shortfall so the objective can pay for it.
-            const slack = lpName('short', constraint.id, `d${day}`);
-            builder.variable(slack, 'continuous', 0, constraint.min);
-            penalty(slack, weight);
-            builder.row([...eligible, [slack, 1]], '>=', constraint.min, constraint.id);
+            const short = slack(constraint, `short_d${day}`, constraint.min);
+            builder.row([...eligible, [short, 1]], '>=', constraint.min, constraint.id);
+            if (constraint.max !== undefined) {
+              // And the overshoot. An earlier version dropped this side entirely, which
+              // left the checker billing for a ceiling the solver had no reason to keep.
+              const over = slack(constraint, `over_d${day}`, model.staff.length);
+              builder.row([...eligible, [over, -1]], '<=', constraint.max, constraint.id);
+            }
           }
         }
         break;
@@ -115,9 +168,7 @@ export function compileRoster(model: RosterModel, options: CompileOptions = {}):
           const terms = slots.map((slot) => [varFor(staff, slot), 1] as [string, number]);
           if (hard) builder.row(terms, '<=', constraint.max, constraint.id);
           else {
-            const over = lpName('over', constraint.id, staff);
-            builder.variable(over, 'continuous', 0, slots.length);
-            penalty(over, weight);
+            const over = slack(constraint, staff, slots.length);
             builder.row([...terms, [over, -1]], '<=', constraint.max, constraint.id);
           }
         }
@@ -129,9 +180,7 @@ export function compileRoster(model: RosterModel, options: CompileOptions = {}):
           const terms = slots.map((slot) => [varFor(staff, slot), 1] as [string, number]);
           if (hard) builder.row(terms, '>=', constraint.min, constraint.id);
           else {
-            const under = lpName('under', constraint.id, staff);
-            builder.variable(under, 'continuous', 0, constraint.min);
-            penalty(under, weight);
+            const under = slack(constraint, staff, constraint.min);
             builder.row([...terms, [under, 1]], '>=', constraint.min, constraint.id);
           }
         }
@@ -144,7 +193,11 @@ export function compileRoster(model: RosterModel, options: CompileOptions = {}):
             const terms = model.shiftTypes.map(
               (shift) => [varFor(staff, { day, shift: shift.id }), 1] as [string, number],
             );
-            builder.row(terms, '<=', 1, constraint.id);
+            if (hard) builder.row(terms, '<=', 1, constraint.id);
+            else {
+              const over = slack(constraint, `${staff}_d${day}`, model.shiftTypes.length - 1);
+              builder.row([...terms, [over, -1]], '<=', 1, constraint.id);
+            }
           }
         }
         break;
@@ -152,17 +205,18 @@ export function compileRoster(model: RosterModel, options: CompileOptions = {}):
 
       case 'min_rest': {
         const requiredMinutes = constraint.hours * 60;
-        for (const [a, b] of conflictingPairs(model, slots, requiredMinutes)) {
+        const pairs = conflictingPairs(model, slots, requiredMinutes);
+        for (const [index, [a, b]] of pairs.entries()) {
           for (const staff of resolveStaff(model, constraint.staff)) {
-            builder.row(
-              [
-                [varFor(staff, a), 1],
-                [varFor(staff, b), 1],
-              ],
-              '<=',
-              1,
-              constraint.id,
-            );
+            const terms: Array<[string, number]> = [
+              [varFor(staff, a), 1],
+              [varFor(staff, b), 1],
+            ];
+            if (hard) builder.row(terms, '<=', 1, constraint.id);
+            else {
+              const breach = slack(constraint, `${staff}_${index}`, 1);
+              builder.row([...terms, [breach, -1]], '<=', 1, constraint.id);
+            }
           }
         }
         break;
@@ -173,13 +227,16 @@ export function compileRoster(model: RosterModel, options: CompileOptions = {}):
         if (window > model.horizon.days) break;
         for (const staff of resolveStaff(model, constraint.staff)) {
           for (let start = 0; start + window <= model.horizon.days; start++) {
+            // Days worked, not shifts worked. The checker counts runs of days, and the two
+            // only coincide when something else already forbids a double shift.
             const terms: Array<[string, number]> = [];
-            for (let day = start; day < start + window; day++) {
-              for (const shift of model.shiftTypes) {
-                terms.push([varFor(staff, { day, shift: shift.id }), 1]);
-              }
+            for (let day = start; day < start + window; day++) terms.push([dayWorked(staff, day), 1]);
+
+            if (hard) builder.row(terms, '<=', constraint.max, constraint.id);
+            else {
+              const over = slack(constraint, `${staff}_${start}`, window);
+              builder.row([...terms, [over, -1]], '<=', constraint.max, constraint.id);
             }
-            builder.row(terms, '<=', constraint.max, constraint.id);
           }
         }
         break;
@@ -198,30 +255,70 @@ export function compileRoster(model: RosterModel, options: CompileOptions = {}):
 
       case 'anti_pair': {
         for (const slot of slots) {
-          builder.row(
-            [
-              [varFor(constraint.a, slot), 1],
-              [varFor(constraint.b, slot), 1],
-            ],
-            '<=',
-            1,
-            constraint.id,
-          );
+          const terms: Array<[string, number]> = [
+            [varFor(constraint.a, slot), 1],
+            [varFor(constraint.b, slot), 1],
+          ];
+          if (hard) builder.row(terms, '<=', 1, constraint.id);
+          else {
+            const together = slack(constraint, slotKey(slot), 1);
+            builder.row([...terms, [together, -1]], '<=', 1, constraint.id);
+          }
         }
         break;
       }
 
       case 'pair': {
         for (const slot of slots) {
-          builder.row(
-            [
-              [varFor(constraint.a, slot), 1],
-              [varFor(constraint.b, slot), -1],
-            ],
-            '=',
-            0,
-            constraint.id,
-          );
+          const a = varFor(constraint.a, slot);
+          const b = varFor(constraint.b, slot);
+          if (hard) {
+            builder.row(
+              [
+                [a, 1],
+                [b, -1],
+              ],
+              '=',
+              0,
+              constraint.id,
+            );
+          } else {
+            // |x_a - x_b| <= apart, priced once per slot they fail to share.
+            const apart = slack(constraint, slotKey(slot), 1);
+            builder.row(
+              [
+                [a, 1],
+                [b, -1],
+                [apart, -1],
+              ],
+              '<=',
+              0,
+              constraint.id,
+            );
+            builder.row(
+              [
+                [b, 1],
+                [a, -1],
+                [apart, -1],
+              ],
+              '<=',
+              0,
+              constraint.id,
+            );
+          }
+        }
+        break;
+      }
+
+      case 'must_work': {
+        for (const slot of constraint.slots) {
+          const name = varFor(constraint.staff, slot);
+          if (hard) builder.row([[name, 1]], '=', 1, constraint.id);
+          else {
+            // w*(1 - x): a constant, minus a reward for actually rostering them.
+            objectiveOffset += weight;
+            penalty(name, -weight);
+          }
         }
         break;
       }

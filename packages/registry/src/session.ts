@@ -9,11 +9,13 @@
  */
 
 import {
+  type Constraint,
   type FairnessLedger,
   type RosterModel,
   type SolveResult,
   type SolverBackend,
   EMPTY_LEDGER,
+  boundResult,
   seedRoster,
   solveRoster,
 } from '@rotaproof/core';
@@ -43,6 +45,8 @@ export interface HeadlessOptions {
 
 export interface HeadlessSession {
   readonly session: RosterSession;
+  /** Exposed so tests can ask the same hypotheticals the actions ask. */
+  dryRun: ActionContext['dryRun'];
   /** Confirmations that were requested, in order, for assertions. */
   readonly confirmations: ConfirmRequest[];
   /** Actions available to an agent right now, honouring role and state. */
@@ -95,10 +99,23 @@ export function createHeadlessSession(
     }
   };
 
+  /**
+   * Solves a hypothetical model. Nothing here is written back to the session, which is the
+   * whole point: a probe must be able to ask "what if" without changing what is.
+   */
+  const dryRun: ActionContext['dryRun'] = (constraints, dryOptions) =>
+    solveRoster({ ...session.model, constraints }, backend, {
+      ledger: session.ledger,
+      explain: false,
+      ...dryOptions,
+    });
+  void (dryRun satisfies ActionContext['dryRun']);
+
   const makeContext = (signal?: AbortSignal): ActionContext => ({
     session,
     update: (mutate) => mutate(session),
     solve,
+    dryRun,
     confirm: async (request) => {
       confirmations.push(request);
       return (await options.onConfirm?.(request)) ?? false;
@@ -109,6 +126,7 @@ export function createHeadlessSession(
   return {
     session,
     confirmations,
+    dryRun,
     availableTools: () =>
       ALL_ACTIONS.filter(
         (action) =>
@@ -119,7 +137,12 @@ export function createHeadlessSession(
     call: async (toolName, args) => {
       const action = ALL_ACTIONS.find((a) => a.id === toolName);
       if (!action) throw new Error(`no such tool: ${toolName}`);
-      return action.run(args as never, makeContext());
+      // Bounded the same way the browser binding bounds it, so what a test sees is what an
+      // agent would see.
+      return boundResult(
+        await action.run(args as never, makeContext()),
+        `Ask ${toolName} for a narrower slice.`,
+      );
     },
     solve: () => solve(),
   };

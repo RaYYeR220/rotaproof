@@ -228,6 +228,17 @@ export function buildConstraint(model: RosterModel, raw: Record<string, unknown>
       if (!staff.ok) return fail(staff.error);
       const hours = requireNumber(raw.hours, 'hours', 'Hours of rest required between shifts, for example 11.');
       if (!hours.ok) return fail(hours.error);
+      // A non-positive gap is not a weaker rule, it is a different one: the compiler would
+      // still forbid overlapping shifts while the checker allowed them.
+      if (hours.value <= 0) {
+        return fail(
+          actionError(
+            'invalid_argument',
+            `"hours" must be greater than zero; received ${hours.value}.`,
+            'To allow back-to-back shifts, remove the rest rule with relax_constraint instead.',
+          ),
+        );
+      }
       return ok({ ...withWeight, kind: 'min_rest', staff: staff.value, hours: hours.value });
     }
 
@@ -239,12 +250,18 @@ export function buildConstraint(model: RosterModel, raw: Record<string, unknown>
       return ok({ ...withWeight, kind: 'max_consecutive_days', staff: staff.value, max: max.value });
     }
 
-    case 'unavailable': {
+    case 'unavailable':
+    case 'must_work': {
       const staff = requireStaff(model, raw.staff);
       if (!staff.ok) return fail(staff.error);
       const slots = requireSlots(model, raw.slots);
       if (!slots.ok) return fail(slots.error);
-      return ok({ ...withWeight, kind: 'unavailable', staff: staff.value, slots: slots.value });
+      return ok({
+        ...withWeight,
+        kind: kind as 'unavailable' | 'must_work',
+        staff: staff.value,
+        slots: slots.value,
+      });
     }
 
     case 'time_off': {
@@ -324,6 +341,7 @@ function defaultGroup(kind: ConstraintKind): string {
     case 'max_consecutive_days':
       return 'working-time';
     case 'unavailable':
+    case 'must_work':
       return 'availability';
     case 'time_off':
       return 'time-off';

@@ -12,6 +12,7 @@
  */
 
 import type {
+  Constraint,
   ConstraintId,
   FairnessLedger,
   Receipt,
@@ -95,8 +96,20 @@ export interface ActionContext {
   session: RosterSession;
   /** Applies a change to the session. Implemented by the host (React store or a test). */
   update: (mutate: (session: RosterSession) => void) => void;
-  /** Runs the solver against the current model. */
+  /** Runs the solver against the current model, and records the result in the session. */
   solve: (options?: { signal?: AbortSignal; timeLimitMs?: number }) => Promise<SolveResult>;
+  /**
+   * Answers a hypothetical without touching the session.
+   *
+   * "Could this person take that shift?" has to be asked by solving a model that is not
+   * the real one. Routing it through `solve` would leave the working schedule replaced by
+   * a fabricated one, and an infeasible probe would wipe it altogether — which is how a
+   * read-only tool ended up silently rewriting the roster.
+   */
+  dryRun: (
+    constraints: Constraint[],
+    options?: { signal?: AbortSignal; timeLimitMs?: number; explain?: boolean },
+  ) => Promise<SolveResult>;
   /** Blocks until a human accepts or declines. Resolves `false` if the call is aborted. */
   confirm: (request: ConfirmRequest, signal?: AbortSignal) => Promise<boolean>;
   /** Cancellation from the agent or the page. */
@@ -185,4 +198,4 @@ export function defineAction<Args, Result>(
 
 export type AnyAction = ActionDefinition<never, unknown>;
 
-export type { ConstraintId, RosterModel, Schedule, SolveResult, StaffId };
+export type { Constraint, ConstraintId, RosterModel, Schedule, SolveResult, StaffId };

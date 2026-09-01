@@ -27,7 +27,7 @@ import { runAction, useWebStore } from '@/lib/store';
 function statusLine(status: string, lastResult: SolveResult | undefined, solving: boolean): string {
   if (solving) return 'Solving…';
   if (!lastResult) return 'Not solved yet.';
-  const parts = [lastResult.status];
+  const parts: string[] = [lastResult.status];
   if (lastResult.objective !== undefined) parts.push(`objective ${lastResult.objective.toFixed(2)}`);
   parts.push(`${Math.round(lastResult.wallMs)}ms`);
   if (status === 'published') parts.push('published');

@@ -14,9 +14,15 @@ import {
   type Constraint,
   type RosterModel,
   type Slot,
+  type PublicStaff,
+  advanceHorizon,
+  boundList,
   check,
   dateOf,
-  publicStaff,
+  foldIntoLedger,
+  ledgerSpread,
+  publicConstraint,
+  publicRoster,
   shiftById,
 } from '@rotaproof/core';
 
@@ -39,19 +45,23 @@ function clock(minutes: number): string {
 }
 
 /** `"S1 full_time 4-5 [keyholder,barista]"` — one person on one short line. */
-function staffLine(model: RosterModel, id: string): string {
-  const person = model.staff.find((s) => s.id === id);
-  if (!person) return id;
-  const pub = publicStaff(person);
+function staffLine(person: PublicStaff): string {
   const bounds =
-    pub.minShifts !== undefined || pub.maxShifts !== undefined
-      ? ` ${pub.minShifts ?? 0}-${pub.maxShifts ?? '∞'}`
+    person.minShifts !== undefined || person.maxShifts !== undefined
+      ? ` ${person.minShifts ?? 0}-${person.maxShifts ?? '∞'}`
       : '';
-  return `${pub.id} ${pub.employment}${bounds} [${pub.skills.join(',')}]`;
+  return `${person.id} ${person.employment}${bounds} [${person.skills.join(',')}]`;
 }
 
+/**
+ * One rule on one line, with its private text stripped first.
+ *
+ * A label is written to be read by people and is safe. A `reason` or a `note` is not:
+ * "away Thursday" is scheduling, "away Thursday for chemotherapy" is not.
+ */
 function constraintLine(constraint: Constraint): string {
-  return `${constraint.id} ${constraint.hardness} ${constraint.kind}: ${constraint.label}`;
+  const safe = publicConstraint(constraint);
+  return `${safe.id} ${safe.hardness} ${safe.kind}: ${safe.label}`;
 }
 
 function slotName(model: RosterModel, slot: Slot): string {
@@ -75,13 +85,17 @@ export const describeRoster = defineAction<Record<string, never>, unknown>({
     const lastDay = dateOf(model.horizon, model.horizon.days - 1);
     const hard = model.constraints.filter((c) => c.hardness === 'hard').length;
 
+    // Everything below is derived from the redacted projection rather than from the model
+    // directly, so a private field added later cannot reach this result by being copied.
+    const view = publicRoster(model);
+
     return {
       week: `${model.horizon.startDate} to ${lastDay} (${model.horizon.days} days, day 0 = ${model.horizon.startDate})`,
-      shifts: model.shiftTypes.map(
+      shifts: view.shiftTypes.map(
         (s) => `${s.id} "${s.label}" ${clock(s.startMinutes)} +${s.durationMinutes / 60}h`,
       ),
-      skills: model.skills,
-      staff: model.staff.map((s) => staffLine(model, s.id)),
+      skills: view.skills,
+      staff: view.staff.map(staffLine),
       rules: {
         total: model.constraints.length,
         hard,
@@ -132,14 +146,20 @@ export const listConstraints = defineAction<
     const limit = Math.min(Math.max(1, args.limit ?? 12), 40);
     const page = all.slice(offset, offset + limit);
 
+    // Trimmed to the output budget as well as to the requested page, and the result says
+    // which happened, so a model that asked for forty and got nine knows why.
+    const bounded = boundList(page, constraintLine, 'Filter by group or kind, or lower limit.');
+    const shown = bounded.items.length;
+
     return {
       matched: all.length,
       offset,
-      returned: page.length,
-      rules: page.map(constraintLine),
+      returned: shown,
+      rules: bounded.items,
+      ...(bounded.truncation ? { trimmed: bounded.truncation.hint } : {}),
       more:
-        offset + page.length < all.length
-          ? `${all.length - offset - page.length} more; call again with offset ${offset + page.length}.`
+        offset + shown < all.length
+          ? `${all.length - offset - shown} more; call again with offset ${offset + shown}.`
           : undefined,
     };
   },
@@ -221,7 +241,8 @@ export const setConstraint = defineAction<Record<string, unknown>, unknown>({
     'one_shift_per_day — staff (or omit for everyone).',
     'min_rest — hours, staff optional.',
     'max_consecutive_days — max, staff optional.',
-    'unavailable / time_off — staff, slots as [{day, shift}]; time_off also takes status: requested | granted | declined.',
+    'unavailable / must_work — staff, slots as [{day, shift}]. One keeps a person off those slots, the other pins them onto them.',
+    'time_off — staff, slots, and status: requested | granted | declined.',
     'pair / anti_pair — a, b (two staff ids).',
     'preference — staff, slots, direction: want | avoid. Always soft.',
     'fairness — dimension: total | nights | weekends. Always soft.',
@@ -242,6 +263,7 @@ export const setConstraint = defineAction<Record<string, unknown>, unknown>({
           'min_rest',
           'max_consecutive_days',
           'unavailable',
+          'must_work',
           'time_off',
           'pair',
           'anti_pair',
@@ -282,19 +304,23 @@ export const setConstraint = defineAction<Record<string, unknown>, unknown>({
     const constraint = built.value;
 
     const replaced = session.model.constraints.some((c) => c.id === constraint.id);
+    // Counted inside the updater. Reading it afterwards is right against an immutable
+    // store and off by one against a mutable one, and this registry supports both.
+    let totalRules = 0;
     update((draft) => {
       draft.model.constraints = replaced
         ? draft.model.constraints.map((c) => (c.id === constraint.id ? constraint : c))
         : [...draft.model.constraints, constraint];
+      totalRules = draft.model.constraints.length;
       // Any schedule that existed was solved against different rules.
       draft.status = 'draft';
-      draft.lastResult = undefined;
+      delete draft.lastResult;
     });
 
     return {
       [replaced ? 'replaced' : 'added']: constraint.id,
       rule: constraintLine(constraint),
-      totalRules: session.model.constraints.length + (replaced ? 0 : 1),
+      totalRules,
       next: 'The previous schedule no longer matches these rules. Call solve_roster.',
     };
   },
@@ -342,7 +368,7 @@ export const relaxConstraint = defineAction<{ id: string; to?: 'soft' | 'removed
               c.id === args.id ? ({ ...c, hardness: 'soft', weight: args.weight ?? 5 } as Constraint) : c,
             );
       draft.status = 'draft';
-      draft.lastResult = undefined;
+      delete draft.lastResult;
     });
 
     return {
@@ -453,8 +479,17 @@ export const explainConflictAction = defineAction<Record<string, never>, unknown
       narrative: conflict.narrative,
       rules: conflict.constraintIds,
       groups: conflict.groups,
-      options: conflict.suggestions.map((s) => `${s.constraintId} — ${s.effect}`),
+      // Each option says whether relaxing it *alone* fixes the real roster. Some rules are
+      // load-bearing for the clash and still leave a second blocker behind, and sending a
+      // manager to relax one of those wastes their afternoon.
+      options: conflict.suggestions.map(
+        (s) => `${s.constraintId} — ${s.effect}${s.sufficient ? '' : ' (not enough on its own)'}`,
+      ),
+      enoughOnItsOwn: conflict.suggestions.filter((s) => s.sufficient).map((s) => s.constraintId),
       foundIn: `${conflict.probes} solver probes, ${Math.round(conflict.wallMs)}ms`,
+      ...(conflict.inconclusive > 0
+        ? { caveat: `${conflict.inconclusive} probe(s) did not finish, so this list may be wider than necessary.` }
+        : {}),
       next: 'Choosing which rule gives way is a judgement about people, not a scheduling problem. Ask the manager.',
     };
   },
@@ -512,6 +547,20 @@ export const publishRoster = defineAction<{ note?: string }, unknown>({
       };
     }
 
+    // The rules can move while the card is on screen — an agent or a second tab can add a
+    // constraint mid-confirmation. Publishing the pre-confirmation schedule then would
+    // mark a roster "published" that no longer satisfies the model it claims to.
+    const stillCurrent =
+      context.session.lastResult?.receipt.modelHash === result.receipt.modelHash &&
+      context.session.schedule === schedule;
+    if (!stillCurrent) {
+      return actionError(
+        'roster_changed',
+        'The rules changed while the confirmation was open, so nothing was published.',
+        'Call solve_roster again and re-publish once you have looked at the new week.',
+      );
+    }
+
     const version = (previous?.version ?? 0) + 1;
     context.update((draft) => {
       draft.versions = [
@@ -534,6 +583,52 @@ export const publishRoster = defineAction<{ note?: string }, unknown>({
       shifts: schedule.length,
       changed: `${diff.added} added, ${diff.removed} removed`,
       receipt: result.receipt.modelHash.slice(0, 12),
+    };
+  },
+});
+
+export const startNextWeek = defineAction<Record<string, never>, unknown>({
+  id: 'start_next_week',
+  title: 'Start next week',
+  order: 9,
+  readOnly: false,
+  roles: ['manager'],
+  // Only once this week has actually been published; rolling forward from a draft would
+  // fold a roster nobody is working into everybody's history.
+  available: (session) => session.versions.length > 0,
+  description:
+    'Moves on to the following week. What everybody worked is folded into the fairness history, so the next roster starts from those totals rather than from zero, and rules pinned to particular days are cleared and listed for you to re-add.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  async run(_args, { session, update }): Promise<ActionResult> {
+    const published = session.versions.at(-1);
+    if (!published) {
+      return actionError(
+        'nothing_published',
+        'This week has not been published yet.',
+        'Publish the roster first, then start the next week.',
+      );
+    }
+
+    const ledger = foldIntoLedger(session.ledger, session.model, published.schedule);
+    const { model, dropped } = advanceHorizon(session.model);
+    const spread = ledgerSpread(ledger, 'weekends');
+
+    update((draft) => {
+      draft.ledger = ledger;
+      draft.model = model;
+      draft.status = 'draft';
+      draft.swaps = [];
+      delete draft.schedule;
+      delete draft.lastResult;
+    });
+
+    return {
+      week: model.horizon.startDate,
+      carried: `${published.schedule.length} shifts folded into the fairness history`,
+      weekendSpread: `${spread.min} to ${spread.max} across the team`,
+      cleared: dropped.map((d) => `${d.id}: ${d.label}`),
+      note: 'Absences and preferences were tied to last week and have been cleared. Re-add any that still apply — a rule that looks weekly, like somebody who never works Fridays, is indistinguishable from a one-off in the data.',
+      next: 'Call solve_roster for the new week.',
     };
   },
 });
@@ -602,6 +697,7 @@ export const MANAGER_ACTIONS = [
   solveRosterAction,
   explainConflictAction,
   publishRoster,
+  startNextWeek,
   editStaffDetails,
   importStaffCsv,
 ];
