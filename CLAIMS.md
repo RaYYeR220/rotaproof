@@ -22,7 +22,7 @@ Measurements below were taken on Windows 11, Node 24.13.0, Chrome 151.0.7922.174
 | claim | tier | evidence |
 |---|---|---|
 | The seeded ten-person week solves to **proven optimality**, objective **28.42**, **42** assignments | REPRODUCIBLE | `pnpm test packages/core/test/solve.test.ts` |
-| Solve time **~320 ms** for 210 binaries / ~250 rows | MEASURED | test output; browser figures on `/tools` |
+| Solve time **~270 ms** for 210 binaries / ~320 rows | MEASURED | test output; browser figures on `/tools` |
 | The same rules always produce the same schedule hash | REPRODUCIBLE | `solve.test.ts` → "is deterministic — the same rules give the same receipt" |
 | The solver's schedule is re-checked by an independent checker before it is returned; a disagreement downgrades the result to `error` | DESIGNED | `packages/core/src/solve.ts`, `check.ts` |
 | A schedule the checker rejects is never presented as valid | REPRODUCIBLE | `solve.test.ts` → "produces a schedule the independent checker accepts" |
@@ -36,10 +36,13 @@ Measurements below were taken on Windows 11, Node 24.13.0, Chrome 151.0.7922.174
 | It names **exactly six** rules | REPRODUCIBLE | `solve.test.ts` → "names the rules that actually clash and leaves the unrelated absences out" |
 | The six are **irreducible** — strip the model to them and it is still impossible; remove any one and it becomes solvable | REPRODUCIBLE | `solve.test.ts` → "returns a genuinely minimal set" (both halves are asserted) |
 | The four unrelated absences that week are **excluded** | REPRODUCIBLE | same test, explicit `not.toContain` assertions |
-| Found in **19 solver probes, ~158 ms** | MEASURED | printed by the test run |
+| Found in **25 solver probes, ~320 ms** | MEASURED | printed by the test run |
 | Explanation completes in under 5 s | REPRODUCIBLE | `solve.test.ts` → "explains itself quickly enough to be interactive" |
+| Each option says whether relaxing it **alone** fixes the real roster, and on the seeded conflict **five of the six do** | REPRODUCIBLE | `softening.test.ts` → "says which single relaxations are actually enough" and "every claim it makes about sufficiency is true of the real model" |
+| An unfinished probe is counted and the narrative stops claiming minimality | DESIGNED | `solve.ts`, `ConflictExplanation.inconclusive`; `softening.test.ts` asserts it is zero when every probe finishes |
+| **NOT CLAIMED:** that the reported set is the *only* minimal one | NOT CLAIMED | A model can have several irreducible conflicting subsets. This returns one of them, found by deletion filtering in a fixed order, which is why the same rules always give the same answer. |
 | **NOT CLAIMED:** that this is HiGHS's own IIS | NOT CLAIMED | It is not. The wasm build exports fourteen C-API functions and `Highs_getIis` is not among them; setting `iis_strategy` is accepted and does nothing. This is deletion filtering, written here. |
-| **NOT CLAIMED:** that the filter is efficient at arbitrary scale | NOT CLAIMED | The second pass is linear in the rules of the surviving groups. At tens of rules that is 19 probes. Hundreds of rules would want a chunked variant, which is not implemented. |
+| **NOT CLAIMED:** that the filter is efficient at arbitrary scale | NOT CLAIMED | The second pass is linear in the rules of the surviving groups. At tens of rules that is a couple of dozen probes. Hundreds of rules would want a chunked variant, which is not implemented. |
 
 ## Privacy
 
@@ -63,6 +66,12 @@ Measurements below were taken on Windows 11, Node 24.13.0, Chrome 151.0.7922.174
 | Tool names, description budgets and parameter-description budgets conform to Chrome's guidance, with two named exceptions | REPRODUCIBLE | `parity.test.ts`; the exceptions are `set_constraint` and `solve_roster` and the reason is in the test |
 | Failures return a named error plus a hint naming valid values | REPRODUCIBLE | `actions.test.ts` → "argument validation guides rather than blocks" |
 | `publish_roster` blocks until a person clicks, and returns `declined` if they refuse | REPRODUCIBLE | `actions.test.ts` → "publishing waits for a person" |
+| Publishing re-checks the model after the click, so a rule change during the confirmation cannot slip through | DESIGNED | `manager.ts`, `roster_changed` |
+| A read-only tool leaves the session exactly as it found it | REPRODUCIBLE | `swaps.test.ts` → "asking a hypothetical changes nothing" |
+| A swap is verified against the **named person**, not merely against the slot being staffed | REPRODUCIBLE | `swaps.test.ts` → "every candidate it offers really can take the shift" |
+| A time-off request is recorded softly, so an unapproved request cannot make the manager's week impossible | REPRODUCIBLE | `swaps.test.ts` → "an unapproved request cannot break the manager week" |
+| Softening a rule genuinely softens it, for every rule kind | REPRODUCIBLE | `softening.test.ts` → "a soft rule is genuinely soft", parameterised over eight rules |
+| The objective the solver minimises and the soft cost the checker reports are the **same quantity** | REPRODUCIBLE | `softening.test.ts` → "objective and reported soft cost are the same quantity", including with a ledger |
 
 ## Browser behaviour
 
@@ -82,6 +91,15 @@ Measurements below were taken on Windows 11, Node 24.13.0, Chrome 151.0.7922.174
 | They run with **no model and no API key** | REPRODUCIBLE | `pnpm evals` → `webmcp-evals smoke` |
 | **NOT CLAIMED:** a tool-selection accuracy figure | NOT CLAIMED | `smoke` proves the tools exist and accept those arguments; it does not involve a model and therefore says nothing about whether a model would pick them. Measuring that needs `webmcp-evals browser` with a real model, which is not run in CI here. We are not quoting a percentage we have not measured. |
 | **NOT CLAIMED:** eval coverage of the three human-gated tools | NOT CLAIMED | `publish_roster`, `offer_swap` and `accept_swap` wait for a click. They are absent from the suites and covered by the Chrome harness instead. |
+
+## Across weeks
+
+| claim | tier | evidence |
+|---|---|---|
+| Publishing and starting the next week folds what everybody worked into the fairness history | REPRODUCIBLE | `next-week.test.ts` → "moves the week on and folds the published roster into the history" |
+| The carried history changes what the solver does | REPRODUCIBLE | `ledger.test.ts` → "pushes weekend work away from whoever has been carrying it" |
+| Rules pinned to particular days are cleared on roll-forward and listed for a human to re-add | REPRODUCIBLE | `next-week.test.ts` → "clears the rules that were pinned to last week and says which" |
+| **NOT CLAIMED:** that recurring absences are detected | NOT CLAIMED | "Never works Fridays" and "away this Thursday" are indistinguishable in the data. Rather than guess, both are cleared and both are reported. |
 
 ## Receipts
 

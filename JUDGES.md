@@ -75,7 +75,7 @@ Try, in order:
 ```bash
 git clone <repo> && cd rotaproof && pnpm install
 
-pnpm test           # 128 tests
+pnpm test           # 190 tests
 pnpm test:webmcp    # drives real Chrome and asserts the live tool surface
 pnpm evals          # 40 eval cases, deterministic, no model and no API key
 pnpm verify:receipt # re-solve a published receipt and compare hashes

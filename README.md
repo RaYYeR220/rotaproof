@@ -9,7 +9,7 @@ Live: <https://rotaproof.vercel.app> · Tool surface: <https://rotaproof.vercel.
 ## The problem
 
 Rostering is a constraint problem that looks like a conversation. A manager says *"give Tom
-Friday off"* and means *"re-solve a 210-variable integer program under twenty-six rules, and
+Friday off"* and means *"re-solve a 210-variable integer program under thirty-three rules, and
 tell me if it can't be done."*
 
 Language models are very good at the conversation and very bad at the program. Ask one to
@@ -46,10 +46,15 @@ Grant one person a Friday off in the seeded week and the page answers:
 > Friday**, and **S2 asked for Friday off**. Every one of them is needed for the clash — drop
 > any single one and the rest fit.
 >
-> *Found in 19 solver probes, 158 ms.*
+> *Found in 25 solver probes, 320 ms.*
 
 Four other people are also away that week. The page does not mention them, because they are
 not part of the conflict — and proving *that* is most of the work.
+
+It also says which of the six would be enough **on its own**. Five of them would; relaxing
+the rest rule alone would not, because a second rule independently forbids the same double
+shift. Minimality inside a set is a weaker statement than it sounds, and sending a manager
+off to relax a rule that will not help is the worst thing this product could do.
 
 Then it stops. Choosing which rule gives way is a judgement about people, and neither the
 agent nor the solver is entitled to make it.
@@ -129,7 +134,7 @@ call stays open. The card shows exactly what will change. Declining returns
 
 ### Tool design decisions, and why
 
-- **Seven tools per session, not thirty.** Register too many overlapping tools and a model
+- **Six to nine tools per session, not thirty.** Register too many overlapping tools and a model
   picks badly; register 296 and the browser switches WebMCP off for the whole document.
 - **Registration order is chosen.** Models show positional bias toward tools listed earlier,
   so orientation comes first, then reads, then the engine, then writes.
@@ -237,7 +242,7 @@ Without either, the page works completely as an ordinary web app; the tool surfa
 absent and `/tools` says so.
 
 ```bash
-pnpm test              # 128 tests: model, solver, parity, privacy, behaviour
+pnpm test              # 190 tests: model, solver, parity, privacy, behaviour
 pnpm test:webmcp       # drives real Chrome and asserts the live tool surface
 pnpm evals             # deterministic eval smoke run, no model and no API key
 pnpm verify:receipt    # re-solve a published receipt and compare hashes
@@ -264,8 +269,14 @@ pnpm verify:receipt    # re-solve a published receipt and compare hashes
 - **The deletion filter is linear in the number of rules** in the surviving groups. At the
   scale this app targets — tens of rules — that is 19 probes. A roster with hundreds of rules
   would want the chunked variant.
-- **One week at a time.** The fairness ledger carries counts across published weeks, but the
-  planner solves a single horizon.
+- **One week at a time.** Publishing and rolling forward carries everybody's totals into the
+  next week's fairness objective, but the planner still solves a single horizon.
+- **Recurring absences are not detected.** "Never works Fridays" and "away this Thursday"
+  look identical in the data, so rolling forward clears both and lists them rather than
+  guessing which should persist.
+- **The conflict set is *a* minimal one, not the only one.** A model can have several
+  irreducible conflicting subsets; deletion filtering in a fixed order returns one of them,
+  which is also why the answer is stable.
 - **`Origin-Trial` tokens are origin-bound**, so a local build never gets the native path from
   a token — the Chrome switch is the only local route.
 
