@@ -23,9 +23,13 @@ Deterministic, no model, no API key — this is the one that belongs in CI:
 
 ```bash
 pnpm dev            # or: pnpm start, after pnpm build
-npx webmcp-evals smoke -u http://localhost:3000/ -e evals/manager.json -v --chrome-channel chrome
-npx webmcp-evals smoke -u http://localhost:3000/staff -e evals/staff.json -v --chrome-channel chrome
+npx webmcp-evals smoke -u "http://localhost:3000/?reset=1" -e evals/manager.json -v --chrome-channel chrome
+npx webmcp-evals smoke -u "http://localhost:3000/staff?reset=1" -e evals/staff.json -v --chrome-channel chrome
 ```
+
+`?reset=1` matters. The roster is kept in IndexedDB so a manager can close the tab and come
+back, but the runner opens a fresh *page* per case against the same *profile*, so without a
+reset the third case would inherit whatever the second one did.
 
 `smoke` executes the expected calls straight against the live page, so it proves the
 tools exist, accept those arguments and return without error. It does not involve a model
@@ -54,3 +58,12 @@ drives real Chrome and does click.
 **Every case starts from the seeded week.** Each eval case gets a fresh page, so a
 trajectory that needs the roster in a particular state has to put it there itself — which
 is why several cases begin by adding a rule before solving.
+
+A third thing worth knowing if you read the raw output: the runner scores a step as failed
+when the result carries `isError: true`, `success: false`, or a string-valued `error` key.
+Our failures are shaped `{ error, message, hint }` on purpose, because a model recovers far
+better from a named error plus a hint than from a bare message. The consequence is that a
+case which *should* fail cannot be expressed in this runner, so the suites contain none —
+the recovery paths are covered by unit tests instead, in
+`packages/registry/test/actions.test.ts` under "argument validation guides rather than
+blocks".

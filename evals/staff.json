@@ -1,48 +1,104 @@
 [
   {
     "name": "Somebody asking what they are working",
-    "messages": [{ "role": "user", "type": "message", "content": "What shifts am I on this week?" }],
-    "expectedCall": [{ "functionName": "my_shifts", "arguments": {} }]
-  },
-  {
-    "name": "Narrowing to the first half of the week",
     "messages": [
-      { "role": "user", "type": "message", "content": "What am I working between Monday and Wednesday?" }
-    ],
-    "expectedCall": [{ "functionName": "my_shifts", "arguments": { "from": 0, "to": 2 } }]
-  },
-  {
-    "name": "Comparing your load to the team",
-    "messages": [
-      { "role": "user", "type": "message", "content": "Am I doing more shifts than everyone else?" }
-    ],
-    "expectedCall": [{ "functionName": "my_shifts", "arguments": {} }]
-  },
-  {
-    "name": "Asking for a day off",
-    "messages": [
-      { "role": "user", "type": "message", "content": "Can I have the Wednesday evening off? My sister is visiting." }
+      {
+        "role": "user",
+        "type": "message",
+        "content": "What shifts am I on this week?"
+      }
     ],
     "expectedCall": [
       {
-        "functionName": "request_time_off",
-        "arguments": { "slots": [{ "day": 2, "shift": "close" }] }
+        "functionName": "my_shifts",
+        "arguments": {}
       }
     ]
   },
   {
-    "name": "Asking for a whole day rather than one shift",
+    "name": "Narrowing to the first half of the week",
     "messages": [
-      { "role": "user", "type": "message", "content": "I need all of Tuesday off." }
+      {
+        "role": "user",
+        "type": "message",
+        "content": "What am I working between Monday and Wednesday?"
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "my_shifts",
+        "arguments": {
+          "from": 0,
+          "to": 2
+        }
+      }
+    ]
+  },
+  {
+    "name": "Comparing your load to the team",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Am I doing more shifts than everyone else?"
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "my_shifts",
+        "arguments": {}
+      }
+    ]
+  },
+  {
+    "name": "Asking for a day off",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Can I have the Wednesday evening off? My sister is visiting."
+      }
     ],
     "expectedCall": [
       {
         "functionName": "request_time_off",
         "arguments": {
           "slots": [
-            { "day": 1, "shift": "open" },
-            { "day": 1, "shift": "mid" },
-            { "day": 1, "shift": "close" }
+            {
+              "day": 2,
+              "shift": "close"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "Asking for a whole day rather than one shift",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "I need all of Tuesday off."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "request_time_off",
+        "arguments": {
+          "slots": [
+            {
+              "day": 1,
+              "shift": "open"
+            },
+            {
+              "day": 1,
+              "shift": "mid"
+            },
+            {
+              "day": 1,
+              "shift": "close"
+            }
           ]
         }
       }
@@ -51,43 +107,98 @@
   {
     "name": "Finding out who could cover a shift",
     "messages": [
-      { "role": "user", "type": "message", "content": "Who could take my Thursday closing shift?" }
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Who could take my Thursday closing shift?"
+      }
     ],
     "expectedCall": [
-      { "functionName": "find_swap", "arguments": { "day": 3, "shift": "close" } }
+      {
+        "functionName": "find_swap",
+        "arguments": {
+          "day": 3,
+          "shift": "close"
+        }
+      }
     ]
   },
   {
     "name": "Look at your own shifts first, then look for cover",
     "messages": [
-      { "role": "user", "type": "message", "content": "Check what I'm on, then see if anyone can take my Saturday." }
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Check what I'm on, then see if anyone can take my Saturday."
+      }
     ],
     "expectedCall": [
-      { "functionName": "my_shifts", "arguments": {} },
-      { "functionName": "find_swap", "arguments": { "day": 5, "shift": { "$type": "string" } } }
+      {
+        "functionName": "my_shifts",
+        "arguments": {}
+      },
+      {
+        "functionName": "find_swap",
+        "arguments": {
+          "day": 5,
+          "shift": {
+            "$type": "string"
+          }
+        }
+      }
     ]
   },
   {
     "name": "Browsing what colleagues have offered",
     "messages": [
-      { "role": "user", "type": "message", "content": "Has anyone put a shift up for grabs?" }
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Has anyone put a shift up for grabs?"
+      }
     ],
-    "expectedCall": [{ "functionName": "list_swaps", "arguments": {} }]
+    "expectedCall": [
+      {
+        "functionName": "list_swaps",
+        "arguments": {}
+      }
+    ]
   },
   {
     "name": "No-action trap: curiosity about a colleague is not a swap",
     "messages": [
-      { "role": "user", "type": "message", "content": "Is S6 working this weekend? Don't change anything." }
-    ],
-    "expectedCall": [{ "functionName": "my_shifts", "arguments": {} }]
-  },
-  {
-    "name": "No-action trap: an unavailable swap id is refused, not invented",
-    "messages": [
-      { "role": "user", "type": "message", "content": "Take swap SW-does-not-exist for me." }
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Is S6 working this weekend? Don't change anything."
+      }
     ],
     "expectedCall": [
-      { "functionName": "accept_swap", "arguments": { "swapId": "SW-does-not-exist" } }
+      {
+        "functionName": "my_shifts",
+        "arguments": {}
+      }
+    ]
+  },
+  {
+    "name": "No-action trap: wanting a swap is not accepting one",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "I'd love to get rid of my Friday. Just tell me who could take it - don't agree anything yet."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "find_swap",
+        "arguments": {
+          "day": 4,
+          "shift": {
+            "$type": "string"
+          }
+        }
+      }
     ]
   }
 ]
