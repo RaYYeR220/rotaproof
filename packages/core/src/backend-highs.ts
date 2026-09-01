@@ -118,12 +118,22 @@ export class HighsBackend implements SolverBackend {
     return out;
   }
 
+  /**
+   * A malformed program throws out of the parser rather than coming back as a status,
+   * so the exception is turned into a message the caller can report. `presolve` is left
+   * at its default deliberately: turning it off takes a 40ms solve past 30 seconds.
+   */
   private run(compiled: CompiledRoster, timeLimitMs: number): HighsResult {
-    return this.highs.solve(toLpFormat(compiled.problem), {
-      output_flag: false,
-      // HiGHS takes seconds; the floor keeps a very small budget from rounding to zero.
-      time_limit: Math.max(0.05, timeLimitMs / 1000),
-    });
+    try {
+      return this.highs.solve(toLpFormat(compiled.problem), {
+        output_flag: false,
+        // HiGHS takes seconds; the floor keeps a very small budget from rounding to zero.
+        time_limit: Math.max(0.05, timeLimitMs / 1000),
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      return { Status: `parse error: ${detail}`, ObjectiveValue: null, Columns: {}, Rows: [] };
+    }
   }
 
   /**

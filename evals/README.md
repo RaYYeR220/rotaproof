@@ -1,0 +1,56 @@
+# Evals
+
+Two suites in the format Chrome documents for WebMCP, one per role.
+
+| file | page | cases |
+|---|---|---|
+| `manager.json` | `/` | 30 |
+| `staff.json` | `/staff` | 10 |
+
+## What they are for
+
+A tool surface is not correct because it exists. It is correct when a model reading only
+the names, descriptions and schemas reaches for the right tool with the right arguments —
+including the cases where the right answer is to read something rather than change it.
+
+Each case is a plain-language request plus the calls it should produce. `expectedCall`
+supports ordering (`ordered`, `unordered`) and matchers (`$type`, `$pattern`, `$lte`,
+`$gte`), so a case can pin the parts that matter and leave a label or a timeout free.
+
+## Running them
+
+Deterministic, no model, no API key — this is the one that belongs in CI:
+
+```bash
+pnpm dev            # or: pnpm start, after pnpm build
+npx webmcp-evals smoke -u http://localhost:3000/ -e evals/manager.json -v --chrome-channel chrome
+npx webmcp-evals smoke -u http://localhost:3000/staff -e evals/staff.json -v --chrome-channel chrome
+```
+
+`smoke` executes the expected calls straight against the live page, so it proves the
+tools exist, accept those arguments and return without error. It does not involve a model
+and cannot tell you whether a model would have picked them.
+
+With a real model, which is what actually measures tool selection:
+
+```bash
+npx webmcp-evals browser -u http://localhost:3000/ -e evals/manager.json --chrome-channel chrome
+```
+
+Chrome needs WebMCP switched on either way:
+
+```
+--enable-features=WebMCPTesting --enable-blink-features=WebMCP
+```
+
+## Two honest notes
+
+**`publish_roster`, `offer_swap` and `accept_swap` are absent from these suites.** They
+block until a person clicks a confirmation in the page, and there is nobody to click
+during an eval run. Adding a bypass so they could be scored would defeat the mechanism
+they exist to demonstrate. They are covered instead by `tests/webmcp.harness.mjs`, which
+drives real Chrome and does click.
+
+**Every case starts from the seeded week.** Each eval case gets a fresh page, so a
+trajectory that needs the roster in a particular state has to put it there itself — which
+is why several cases begin by adding a rule before solving.

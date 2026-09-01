@@ -1,0 +1,389 @@
+[
+  {
+    "name": "Orientation before anything else",
+    "messages": [
+      { "role": "user", "type": "message", "content": "What is this page for and who is on the team?" }
+    ],
+    "expectedCall": [{ "functionName": "describe_roster", "arguments": {} }]
+  },
+  {
+    "name": "Team size is a read, not a solve",
+    "messages": [
+      { "role": "user", "type": "message", "content": "How many people am I rostering this week?" }
+    ],
+    "expectedCall": [{ "functionName": "describe_roster", "arguments": {} }]
+  },
+  {
+    "name": "Rules are listed rather than guessed at",
+    "messages": [
+      { "role": "user", "type": "message", "content": "What scheduling rules are currently in force?" }
+    ],
+    "expectedCall": [{ "functionName": "list_constraints", "arguments": {} }]
+  },
+  {
+    "name": "Filtering the rule list by group",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Show me just the availability rules." }
+    ],
+    "expectedCall": [
+      { "functionName": "list_constraints", "arguments": { "group": "availability" } }
+    ]
+  },
+  {
+    "name": "Filtering the rule list by kind",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Which rules are about minimum rest between shifts?" }
+    ],
+    "expectedCall": [{ "functionName": "list_constraints", "arguments": { "kind": "min_rest" } }]
+  },
+  {
+    "name": "Paging rather than asking for everything at once",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Show me the next batch of rules after the first twelve." }
+    ],
+    "expectedCall": [
+      { "functionName": "list_constraints", "arguments": { "offset": 12, "limit": { "$lte": 40 } } }
+    ]
+  },
+  {
+    "name": "Build the week",
+    "messages": [{ "role": "user", "type": "message", "content": "Build this week's roster." }],
+    "expectedCall": [{ "functionName": "solve_roster", "arguments": {} }]
+  },
+  {
+    "name": "Solve then read the result back",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Work out the roster and then tell me who is on which shift." }
+    ],
+    "expectedCall": [
+      { "functionName": "solve_roster", "arguments": {} },
+      { "functionName": "inspect_schedule", "arguments": {} }
+    ]
+  },
+  {
+    "name": "A single day is a narrower read, not a whole-week dump",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Sort the week out, then just show me Friday." }
+    ],
+    "expectedCall": [
+      { "functionName": "solve_roster", "arguments": {} },
+      { "functionName": "inspect_schedule", "arguments": { "day": 4 } }
+    ]
+  },
+  {
+    "name": "One person's week",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Solve it, then show me everything S7 is working." }
+    ],
+    "expectedCall": [
+      { "functionName": "solve_roster", "arguments": {} },
+      { "functionName": "inspect_schedule", "arguments": { "staff": "S7" } }
+    ]
+  },
+  {
+    "name": "A shorter solver budget when asked to be quick",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Give me a rough roster fast, two seconds at most." }
+    ],
+    "expectedCall": [
+      { "functionName": "solve_roster", "arguments": { "timeLimitMs": { "$lte": 3000 } } }
+    ]
+  },
+  {
+    "name": "Adding a coverage rule",
+    "messages": [
+      { "role": "user", "type": "message", "content": "We need three people on every closing shift from now on." }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "set_constraint",
+        "arguments": {
+          "kind": "coverage",
+          "label": { "$type": "string" },
+          "shift": "close",
+          "min": 3
+        }
+      }
+    ]
+  },
+  {
+    "name": "Marking somebody unavailable",
+    "messages": [
+      { "role": "user", "type": "message", "content": "S4 can't do the Monday opening shift." }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "set_constraint",
+        "arguments": {
+          "kind": "unavailable",
+          "label": { "$type": "string" },
+          "staff": "S4",
+          "slots": [{ "day": 0, "shift": "open" }]
+        }
+      }
+    ]
+  },
+  {
+    "name": "Granting time off is a rule change, not a schedule edit",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Give S10 the whole of Wednesday off." }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "set_constraint",
+        "arguments": {
+          "kind": "time_off",
+          "label": { "$type": "string" },
+          "staff": "S10",
+          "status": "granted",
+          "slots": [
+            { "day": 2, "shift": "open" },
+            { "day": 2, "shift": "mid" },
+            { "day": 2, "shift": "close" }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "name": "A preference is soft, not a hard rule",
+    "messages": [
+      { "role": "user", "type": "message", "content": "S5 would rather not work Saturday nights, but it's not a hard no." }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "set_constraint",
+        "arguments": {
+          "kind": "preference",
+          "label": { "$type": "string" },
+          "staff": "S5",
+          "direction": "avoid",
+          "slots": [{ "day": 5, "shift": "close" }]
+        }
+      }
+    ]
+  },
+  {
+    "name": "Two people who must not be paired",
+    "messages": [
+      { "role": "user", "type": "message", "content": "S4 and S5 shouldn't be on the same shift." }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "set_constraint",
+        "arguments": {
+          "kind": "anti_pair",
+          "label": { "$type": "string" },
+          "a": "S4",
+          "b": "S5"
+        }
+      }
+    ]
+  },
+  {
+    "name": "Tightening the rest rule",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Make it twelve hours of rest between shifts, not eleven." }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "set_constraint",
+        "arguments": { "kind": "min_rest", "label": { "$type": "string" }, "hours": 12 }
+      }
+    ]
+  },
+  {
+    "name": "Capping somebody's hours",
+    "messages": [
+      { "role": "user", "type": "message", "content": "S8 shouldn't work more than two shifts this week." }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "set_constraint",
+        "arguments": { "kind": "max_shifts", "label": { "$type": "string" }, "staff": "S8", "max": 2 }
+      }
+    ]
+  },
+  {
+    "name": "Spreading weekends evenly is a fairness rule",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Make sure weekend work is shared out evenly." }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "set_constraint",
+        "arguments": { "kind": "fairness", "label": { "$type": "string" }, "dimension": "weekends" }
+      }
+    ]
+  },
+  {
+    "name": "A change is followed by a fresh solve",
+    "messages": [
+      { "role": "user", "type": "message", "content": "S9 can't work Monday at all. Redo the roster after that." }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "set_constraint",
+        "arguments": {
+          "kind": "unavailable",
+          "label": { "$type": "string" },
+          "staff": "S9",
+          "slots": [
+            { "day": 0, "shift": "open" },
+            { "day": 0, "shift": "mid" },
+            { "day": 0, "shift": "close" }
+          ]
+        }
+      },
+      { "functionName": "solve_roster", "arguments": {} }
+    ]
+  },
+  {
+    "name": "The impossible week: ask, fail, then ask why",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "S2 has asked for Friday off. Grant it, rebuild the roster, and if it can't be done tell me exactly what is stopping it."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "set_constraint",
+        "arguments": {
+          "kind": "time_off",
+          "label": { "$type": "string" },
+          "staff": "S2",
+          "status": "granted",
+          "slots": [
+            { "day": 4, "shift": "open" },
+            { "day": 4, "shift": "mid" },
+            { "day": 4, "shift": "close" }
+          ]
+        }
+      },
+      { "functionName": "solve_roster", "arguments": {} },
+      { "functionName": "explain_conflict", "arguments": {} }
+    ]
+  },
+  {
+    "name": "Resolving a conflict by relaxing exactly one rule",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Grant S2 Friday off and rebuild. If that breaks the week, find out why and then drop the request again so we at least have a working roster."
+      }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "set_constraint",
+        "arguments": {
+          "kind": "time_off",
+          "label": { "$type": "string" },
+          "staff": "S2",
+          "status": "granted",
+          "slots": [
+            { "day": 4, "shift": "open" },
+            { "day": 4, "shift": "mid" },
+            { "day": 4, "shift": "close" }
+          ]
+        }
+      },
+      { "functionName": "solve_roster", "arguments": {} },
+      { "functionName": "explain_conflict", "arguments": {} },
+      {
+        "functionName": "relax_constraint",
+        "arguments": { "id": { "$pattern": "^C-time" }, "to": "removed" }
+      },
+      { "functionName": "solve_roster", "arguments": {} }
+    ]
+  },
+  {
+    "name": "Softening a rule rather than deleting it",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Make the eleven-hour rest rule a preference rather than a hard requirement." }
+    ],
+    "expectedCall": [
+      { "functionName": "relax_constraint", "arguments": { "id": "C-rest-11", "to": "soft" } }
+    ]
+  },
+  {
+    "name": "Removing a rule outright",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Drop the rule about the trainee and the new starter completely." }
+    ],
+    "expectedCall": [
+      {
+        "functionName": "relax_constraint",
+        "arguments": { "id": "C-trainee-supervision", "to": "removed" }
+      }
+    ]
+  },
+  {
+    "name": "Two independent changes, order irrelevant, then one solve",
+    "messages": [
+      {
+        "role": "user",
+        "type": "message",
+        "content": "Cap S3 at one shift and cap S8 at two, then rebuild the week."
+      }
+    ],
+    "expectedCall": [
+      {
+        "unordered": [
+          {
+            "functionName": "set_constraint",
+            "arguments": { "kind": "max_shifts", "label": { "$type": "string" }, "staff": "S3", "max": 1 }
+          },
+          {
+            "functionName": "set_constraint",
+            "arguments": { "kind": "max_shifts", "label": { "$type": "string" }, "staff": "S8", "max": 2 }
+          }
+        ]
+      },
+      { "functionName": "solve_roster", "arguments": {} }
+    ]
+  },
+  {
+    "name": "Reading the load spread after solving",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Solve the week and tell me whether anyone is carrying more than their share." }
+    ],
+    "expectedCall": [
+      { "functionName": "solve_roster", "arguments": {} },
+      { "functionName": "inspect_schedule", "arguments": {} }
+    ]
+  },
+  {
+    "name": "Checking a specific day and a specific person together",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Build the roster, then check whether S1 is on that Saturday." }
+    ],
+    "expectedCall": [
+      { "functionName": "solve_roster", "arguments": {} },
+      { "functionName": "inspect_schedule", "arguments": { "day": 5, "staff": "S1" } }
+    ]
+  },
+  {
+    "name": "No-action trap: a question about the rules is not a change to them",
+    "messages": [
+      { "role": "user", "type": "message", "content": "Out of interest, what happens if a keyholder calls in sick? Don't change anything." }
+    ],
+    "expectedCall": [{ "functionName": "list_constraints", "arguments": {} }]
+  },
+  {
+    "name": "No-action trap: asking what a rule id means is a read",
+    "messages": [
+      { "role": "user", "type": "message", "content": "What is C-keyholder-close?" }
+    ],
+    "expectedCall": [{ "functionName": "list_constraints", "arguments": {} }]
+  },
+  {
+    "name": "No-action trap: personal details are not available at all",
+    "messages": [
+      { "role": "user", "type": "message", "content": "What is S1's real name and hourly rate?" }
+    ],
+    "expectedCall": [{ "functionName": "describe_roster", "arguments": {} }]
+  }
+]

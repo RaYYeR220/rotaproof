@@ -253,7 +253,16 @@ export async function explainConflict(
         }),
       };
       probes++;
-      const outcome = await backend.solve(trial, probeOptions);
+      // A backend can throw rather than return — an LP parse error surfaces as an
+      // exception, not a status. A probe that fails to run tells us nothing, so the
+      // candidate stays in the suspect set: the answer is then broader than necessary
+      // but never wrong, which is the right way round for a proof.
+      let outcome: BackendResult;
+      try {
+        outcome = await backend.solve(trial, probeOptions);
+      } catch {
+        continue;
+      }
       // Still impossible without it, so it was not the cause. Leave it out for good.
       // Anything other than a clean infeasible verdict — a timeout, an error — is
       // treated as "cannot rule this one out", which keeps the answer sound if broad.
