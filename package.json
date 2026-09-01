@@ -12,8 +12,11 @@
     "lint": "next lint --dir apps/web"
   },
   "devDependencies": {
+    "@types/node": "^24.3.0",
     "typescript": "^5.9.2",
-    "vitest": "^3.2.4",
-    "@types/node": "^24.3.0"
+    "vitest": "^3.2.4"
+  },
+  "dependencies": {
+    "highs": "^1.15.2"
   }
 }

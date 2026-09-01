@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      highs:
+        specifier: ^1.15.2
+        version: 1.15.2
     devDependencies:
       '@types/node':
         specifier: ^24.3.0
@@ -416,6 +420,9 @@ packages:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
+
+  highs@1.15.2:
+    resolution: {integrity: sha512-IugrQ7Z8nSMHgVneTFwzV8fIfaR85l/kGhN+jvEDbm5k5MlGXtq1Zp2hy1fkmHA71nCmIg9F7ayWfEPxLpfUyA==}
 
   js-tokens@9.0.1:
     resolution: {integrity: sha512-mxa9E9ITFOt0ban3j6L5MpjwegGz6lBQmM1IJkWeBZGcMxto50+eWdjC/52xDbS2vy0k7vIMK0Fe2wfL9OQSpQ==}
@@ -859,6 +866,8 @@ snapshots:
 
   fsevents@2.3.3:
     optional: true
+
+  highs@1.15.2: {}
 
   js-tokens@9.0.1: {}
 

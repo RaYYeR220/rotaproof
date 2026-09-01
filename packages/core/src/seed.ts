@@ -1,10 +1,10 @@
 /**
  * The roster a first-time visitor lands on.
  *
- * A real week at a small café: eight people, three shifts a day, a keyholder required to
- * open and to close, one barista trainee who cannot close alone, a student who is at
- * lectures on Tuesday and Thursday mornings, and a fairness rule because somebody always
- * ends up with every Saturday night.
+ * A real week at a small café: ten people, three shifts a day, a keyholder required to
+ * open and to close, a trainee who must not be left with the new starter, a student who
+ * is at lectures on Tuesday and Thursday mornings, one keyholder away at a wedding, and a
+ * fairness rule because somebody always ends up with every Saturday night.
  *
  * It is deliberately *tight but satisfiable*. One extra request tips it into infeasible,
  * which is the point — the interesting behaviour of this app is what it does when the
@@ -49,25 +49,25 @@ const STAFF: Staff[] = [
     hourlyRate: 16.25,
     skills: ['barista', 'food_safety'],
     employment: 'part_time',
-    maxShifts: 3,
+    maxShifts: 2,
   },
   {
     id: 'S4',
     name: 'Daniel Okonkwo',
-    notes: 'Studying — lectures Tue/Thu mornings.',
+    notes: 'Studying - lectures Tue/Thu mornings.',
     hourlyRate: 15.5,
     skills: ['barista'],
     employment: 'part_time',
-    maxShifts: 4,
+    maxShifts: 5,
   },
   {
     id: 'S5',
-    name: 'Ana Kovač',
+    name: 'Ana Kovac',
     notes: 'Trainee. Not signed off to close unsupervised.',
     hourlyRate: 14.0,
     skills: ['barista'],
     employment: 'part_time',
-    maxShifts: 4,
+    maxShifts: 5,
   },
   {
     id: 'S6',
@@ -95,7 +95,26 @@ const STAFF: Staff[] = [
     hourlyRate: 15.0,
     skills: ['barista'],
     employment: 'casual',
-    maxShifts: 3,
+    maxShifts: 4,
+  },
+  {
+    id: 'S9',
+    name: 'Lena Fischer',
+    notes: 'Keyholder. Away Thursday and Friday for a wedding.',
+    hourlyRate: 18.25,
+    skills: ['keyholder', 'barista'],
+    employment: 'full_time',
+    minShifts: 3,
+    maxShifts: 5,
+  },
+  {
+    id: 'S10',
+    name: 'Omar Haddad',
+    notes: 'Covers mids; food-safety trained.',
+    hourlyRate: 16.5,
+    skills: ['barista', 'food_safety'],
+    employment: 'part_time',
+    maxShifts: 5,
   },
 ];
 
@@ -107,6 +126,28 @@ const THU = 3;
 const FRI = 4;
 const SAT = 5;
 const SUN = 6;
+
+/** Contracted ceilings, mirroring `Staff.maxShifts` so the rules are visible as rules. */
+const CONTRACT_CAPS: Array<[string, number]> = [
+  ['S1', 5],
+  ['S2', 5],
+  ['S3', 2],
+  ['S4', 5],
+  ['S5', 5],
+  ['S6', 5],
+  ['S7', 5],
+  ['S8', 4],
+  ['S9', 5],
+  ['S10', 5],
+];
+
+/** Guaranteed minimums for the salaried staff. */
+const CONTRACT_FLOORS: Array<[string, number]> = [
+  ['S1', 4],
+  ['S2', 4],
+  ['S6', 3],
+  ['S9', 3],
+];
 
 const CONSTRAINTS: Constraint[] = [
   {
@@ -198,105 +239,28 @@ const CONSTRAINTS: Constraint[] = [
     staff: '*',
     max: 5,
   },
-  {
-    id: 'C-contract-S1',
-    kind: 'max_shifts',
-    label: 'S1 contracted to at most 5 shifts',
-    hardness: 'hard',
-    group: 'contracts',
-    staff: 'S1',
-    max: 5,
-  },
-  {
-    id: 'C-contract-S2',
-    kind: 'max_shifts',
-    label: 'S2 contracted to at most 5 shifts',
-    hardness: 'hard',
-    group: 'contracts',
-    staff: 'S2',
-    max: 5,
-  },
-  {
-    id: 'C-contract-S3',
-    kind: 'max_shifts',
-    label: 'S3 part-time, at most 3 shifts',
-    hardness: 'hard',
-    group: 'contracts',
-    staff: 'S3',
-    max: 3,
-  },
-  {
-    id: 'C-contract-S4',
-    kind: 'max_shifts',
-    label: 'S4 part-time, at most 4 shifts',
-    hardness: 'hard',
-    group: 'contracts',
-    staff: 'S4',
-    max: 4,
-  },
-  {
-    id: 'C-contract-S5',
-    kind: 'max_shifts',
-    label: 'S5 part-time, at most 4 shifts',
-    hardness: 'hard',
-    group: 'contracts',
-    staff: 'S5',
-    max: 4,
-  },
-  {
-    id: 'C-contract-S6',
-    kind: 'max_shifts',
-    label: 'S6 contracted to at most 5 shifts',
-    hardness: 'hard',
-    group: 'contracts',
-    staff: 'S6',
-    max: 5,
-  },
-  {
-    id: 'C-contract-S7',
-    kind: 'max_shifts',
-    label: 'S7 casual, at most 5 shifts',
-    hardness: 'hard',
-    group: 'contracts',
-    staff: 'S7',
-    max: 5,
-  },
-  {
-    id: 'C-contract-S8',
-    kind: 'max_shifts',
-    label: 'S8 casual, at most 3 shifts',
-    hardness: 'hard',
-    group: 'contracts',
-    staff: 'S8',
-    max: 3,
-  },
-  {
-    id: 'C-min-S1',
-    kind: 'min_shifts',
-    label: 'S1 guaranteed 4 shifts',
-    hardness: 'hard',
-    group: 'contracts',
-    staff: 'S1',
-    min: 4,
-  },
-  {
-    id: 'C-min-S2',
-    kind: 'min_shifts',
-    label: 'S2 guaranteed 4 shifts',
-    hardness: 'hard',
-    group: 'contracts',
-    staff: 'S2',
-    min: 4,
-  },
-  {
-    id: 'C-min-S6',
-    kind: 'min_shifts',
-    label: 'S6 guaranteed 3 shifts',
-    hardness: 'hard',
-    group: 'contracts',
-    staff: 'S6',
-    min: 3,
-  },
+  ...CONTRACT_CAPS.map(
+    ([staff, max]): Constraint => ({
+      id: `C-contract-${staff}`,
+      kind: 'max_shifts',
+      label: `${staff} contracted to at most ${max} shifts`,
+      hardness: 'hard',
+      group: 'contracts',
+      staff,
+      max,
+    }),
+  ),
+  ...CONTRACT_FLOORS.map(
+    ([staff, min]): Constraint => ({
+      id: `C-min-${staff}`,
+      kind: 'min_shifts',
+      label: `${staff} guaranteed ${min} shifts`,
+      hardness: 'hard',
+      group: 'contracts',
+      staff,
+      min,
+    }),
+  ),
   {
     id: 'C-unavail-S4-lectures',
     kind: 'unavailable',
@@ -304,7 +268,7 @@ const CONSTRAINTS: Constraint[] = [
     hardness: 'hard',
     group: 'availability',
     staff: 'S4',
-    reason: 'University lectures, 09:00–13:00.',
+    reason: 'University lectures, 09:00-13:00.',
     slots: [
       { day: TUE, shift: 'open' },
       { day: THU, shift: 'open' },
@@ -318,11 +282,17 @@ const CONSTRAINTS: Constraint[] = [
     group: 'availability',
     staff: 'S6',
     reason: 'Second job on Friday evenings.',
-    slots: [
-      { day: FRI, shift: 'open' },
-      { day: FRI, shift: 'mid' },
-      { day: FRI, shift: 'close' },
-    ],
+    slots: SHIFT_TYPES.map((shift) => ({ day: FRI, shift: shift.id })),
+  },
+  {
+    id: 'C-unavail-S9-wedding',
+    kind: 'unavailable',
+    label: 'S9 is away Thursday and Friday',
+    hardness: 'hard',
+    group: 'availability',
+    staff: 'S9',
+    reason: "Sister's wedding, travelling Thursday morning.",
+    slots: [THU, FRI].flatMap((day) => SHIFT_TYPES.map((shift) => ({ day, shift: shift.id }))),
   },
   {
     id: 'C-unavail-S3-weekdays',
@@ -343,13 +313,13 @@ const CONSTRAINTS: Constraint[] = [
     hardness: 'hard',
     group: 'availability',
     staff: 'S8',
-    reason: 'New starter — no unsupervised evenings for the first month.',
+    reason: 'New starter - no unsupervised evenings for the first month.',
     slots: Array.from({ length: 7 }, (_, day) => ({ day, shift: 'close' })),
   },
   {
     id: 'C-trainee-supervision',
     kind: 'anti_pair',
-    label: 'The trainee must not close with the new starter',
+    label: 'The trainee and the new starter must not share a shift',
     hardness: 'hard',
     group: 'supervision',
     a: 'S5',
@@ -412,10 +382,13 @@ export function seedRoster(): RosterModel {
 /**
  * The one extra request that makes the seed week impossible.
  *
- * S6 already cannot work Fridays; granting S2 the Friday off leaves S1 as the only
- * keyholder for both the Friday open and the Friday close, which the 11-hour rest rule
- * forbids. Three rules, all individually reasonable, that cannot hold at once — the
- * demo's whole argument in one click.
+ * There are four keyholders. S6 never works Fridays and S9 is away at a wedding, so
+ * Friday already rests on S1 and S2 — one opens, the other closes. Grant S2 the day off
+ * and S1 would have to do both, which the eleven-hour rest rule forbids.
+ *
+ * Six rules, every one of them reasonable on its own, that cannot hold together. The
+ * solver finds exactly those six and nothing else: the four unrelated absences that same
+ * week are ruled out rather than listed. That is the demo's whole argument in one click.
  */
 export function fridayConflict(): Constraint {
   return {

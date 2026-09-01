@@ -203,18 +203,20 @@ export async function solveRoster(
 }
 
 /**
- * Deletion filtering over hard-constraint groups.
+ * Deletion filtering, in two passes.
  *
- * Start from the full hard set, which is known infeasible. Take each group in turn and
- * ask whether the model is *still* infeasible without it. If it is, that group was not
- * to blame and stays out permanently. If dropping it makes the model solvable, it is
- * part of the conflict and goes back in. What survives is irreducible: every member is
- * load-bearing.
+ * Start from the full hard set, which is known infeasible. Take each candidate in turn
+ * and ask whether the model is *still* impossible without it. If it is, that candidate
+ * was not to blame and stays out permanently. If dropping it makes the model solvable,
+ * it is load-bearing and goes back in. What survives is irreducible: remove any single
+ * member and the rest are satisfiable.
  *
- * Grouping matters. Filtering at the level of individual matrix rows would return
- * something technically minimal and humanly useless ("row 1174"). Filtering over named
- * groups — coverage, keyholder cover, working time, contracts — returns the sentence a
- * manager would have said themselves.
+ * The first pass runs over named groups — coverage, keyholder cover, working time,
+ * contracts — which is cheap, because there are far fewer groups than rules. The second
+ * pass then filters the individual rules inside the surviving groups. Without it the
+ * answer stays technically minimal but reads badly: "availability" would implicate every
+ * absence in the week, including the four that have nothing to do with the clash. With
+ * it, the result is the sentence a manager would have said themselves.
  */
 export async function explainConflict(
   model: RosterModel,
@@ -231,64 +233,58 @@ export async function explainConflict(
   };
 
   const hard = model.constraints.filter((c) => c.hardness === 'hard');
-  const groups = groupsOf(hard);
   let probes = 0;
 
-  /** Groups still suspected of being part of the conflict. */
-  const suspects = new Set(groups.keys());
+  /** Runs one deletion-filter pass over `candidates`, keyed by `keyOf`. */
+  const filter = async <T>(
+    candidates: T[],
+    keyOf: (candidate: T) => string,
+    memberOf: (constraint: Constraint) => string,
+  ): Promise<Set<string>> => {
+    const suspects = new Set(candidates.map(keyOf));
+    for (const key of [...suspects]) {
+      if (options.signal?.aborted) break;
+      const trial: RosterModel = {
+        ...model,
+        constraints: model.constraints.filter((c) => {
+          if (c.hardness !== 'hard') return true;
+          const member = memberOf(c);
+          return suspects.has(member) && member !== key;
+        }),
+      };
+      probes++;
+      const outcome = await backend.solve(trial, probeOptions);
+      // Still impossible without it, so it was not the cause. Leave it out for good.
+      // Anything other than a clean infeasible verdict — a timeout, an error — is
+      // treated as "cannot rule this one out", which keeps the answer sound if broad.
+      if (outcome.status === 'infeasible') suspects.delete(key);
+    }
+    return suspects;
+  };
 
-  for (const group of groups.keys()) {
-    const trial = { ...model, constraints: constraintsExcept(model, suspects, group) };
-    probes++;
-    const outcome = await backend.solve(trial, probeOptions);
+  const groupOf = (c: Constraint) => c.group ?? c.id;
+  const survivingGroups = await filter([...new Set(hard.map(groupOf))], (g) => g, groupOf);
 
-    // Still impossible without this group, so it was not the cause. Leave it out.
-    if (outcome.status === 'infeasible') suspects.delete(group);
-    // Anything other than a clean infeasible verdict (timeout, error) is treated as
-    // "cannot rule this group out", which keeps the explanation sound if pessimistic.
-  }
+  // Second pass: only the rules inside the groups that survived are still candidates,
+  // and each is now tested on its own.
+  const narrowed = hard.filter((c) => survivingGroups.has(groupOf(c)));
+  const survivingIds = await filter(
+    narrowed,
+    (c) => c.id,
+    (c) => (survivingGroups.has(groupOf(c)) ? c.id : ' never'),
+  );
 
-  const survivingIds: ConstraintId[] = [];
-  for (const group of suspects) survivingIds.push(...(groups.get(group) ?? []));
-
-  const byId = new Map(model.constraints.map((c) => [c.id, c]));
-  const involved = survivingIds
-    .map((id) => byId.get(id))
-    .filter((c): c is Constraint => c !== undefined);
+  const involved = narrowed.filter((c) => survivingIds.has(c.id));
+  const groups = [...new Set(involved.map(groupOf))];
 
   return {
-    constraintIds: survivingIds,
-    groups: [...suspects],
-    narrative: narrate(involved, [...suspects]),
+    constraintIds: involved.map((c) => c.id),
+    groups,
+    narrative: narrate(involved, groups),
     suggestions: involved.map(suggest),
     probes,
     wallMs: now() - started,
   };
-}
-
-/** Hard constraints keyed by group; ungrouped constraints form singleton groups. */
-function groupsOf(hard: Constraint[]): Map<string, ConstraintId[]> {
-  const groups = new Map<string, ConstraintId[]>();
-  for (const constraint of hard) {
-    const key = constraint.group ?? constraint.id;
-    const existing = groups.get(key);
-    if (existing) existing.push(constraint.id);
-    else groups.set(key, [constraint.id]);
-  }
-  return groups;
-}
-
-/** All soft constraints, plus the hard constraints whose group is in `keep` minus `drop`. */
-function constraintsExcept(
-  model: RosterModel,
-  keep: Set<string>,
-  drop: string,
-): Constraint[] {
-  return model.constraints.filter((c) => {
-    if (c.hardness !== 'hard') return true;
-    const group = c.group ?? c.id;
-    return keep.has(group) && group !== drop;
-  });
 }
 
 function narrate(involved: Constraint[], groups: string[]): string {

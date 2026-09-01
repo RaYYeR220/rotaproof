@@ -5,3 +5,4 @@ export * from './seed.js';
 export * from './mip.js';
 export * from './compile.js';
 export * from './solve.js';
+export * from './backend-highs.js';
