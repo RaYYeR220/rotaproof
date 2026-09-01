@@ -1,7 +1,24 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs",
+  "framework": null,
+  "cleanUrls": true,
+  "trailingSlash": false,
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter @rotaproof/web build",
-  "outputDirectory": "apps/web/.next"
+  "buildCommand": "NEXT_EXPORT=1 pnpm --filter @rotaproof/web build",
+  "outputDirectory": "apps/web/out",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Origin-Agent-Cluster",
+          "value": "?1"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "tools=(self)"
+        }
+      ]
+    }
+  ]
 }

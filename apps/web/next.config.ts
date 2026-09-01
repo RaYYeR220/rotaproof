@@ -37,6 +37,21 @@ const nextConfig: NextConfig = {
   // turned off rather than left to overwrite it.
   agentRules: false,
 
+  /**
+   * Built as a static export for deployment.
+   *
+   * There is no server in this project — no route handlers, no server actions, no outbound
+   * request — so a static export is not a limitation, it is the honest shape. Exporting
+   * makes "the roster never leaves your browser" true of the deployment as well as of the
+   * code. It is behind an environment variable because `next start` refuses to run against
+   * an export, and the browser test harness needs a real server locally.
+   *
+   * The one thing an export cannot carry is `headers()`, so the two headers WebMCP needs
+   * are set in `vercel.json` instead. They are asserted by `tests/webmcp.harness.mjs`
+   * against whatever is actually serving.
+   */
+  ...(process.env.NEXT_EXPORT === '1' ? { output: 'export' as const } : {}),
+
   async headers() {
     return [
       {
