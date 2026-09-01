@@ -314,10 +314,19 @@ let booted: Promise<void> | undefined;
 /**
  * Who the staff view signs you in as before you pick somebody else.
  *
- * A keyholder with a full week: nights, a weekend, and a Friday they cannot work. Every
- * question the staff surface can ask has something to bite on from here.
+ * The trainee, who in the seeded week carries a full five shifts across four closes and a
+ * Friday, and who is half of the supervision rule that makes a swap non-trivial. Every
+ * question this surface can ask has something to bite on from here.
+ *
+ * It is a demo default, not a rule: the picker changes it, and the shifts this person
+ * actually holds depend on the seeded optimum, so a change to the seed may want a
+ * different name here.
+ *
+ * S6 specifically, because the two `find_swap` eval cases name shifts from the seeded
+ * optimum and S6 is the person who holds both of them. That coupling is noted in
+ * `evals/README.md`; if this changes, those two cases have to change with it.
  */
-const DEFAULT_ACTOR: StaffId = 'S5';
+const DEFAULT_ACTOR: StaffId = 'S6';
 
 /**
  * Gives the staff surface something to be about.
