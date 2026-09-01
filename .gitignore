@@ -31,3 +31,6 @@ Thumbs.db
 *.swp
 .idea/
 .vscode/
+
+# copied from the highs package at install and build time
+apps/web/public/highs.wasm
