@@ -193,8 +193,9 @@ export const useWebStore = create<WebStore>()((set, get) => ({
     confirmResolvers.get(id)?.(false);
   },
 
+  /** Picking a person is also what puts the session on the staff surface. */
   signInAs: (staff) => {
-    set((state) => ({ session: { ...state.session, actorId: staff } }));
+    set((state) => ({ session: { ...state.session, role: 'staff', actorId: staff } }));
   },
 
   noteEvent: (event) => {

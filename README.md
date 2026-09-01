@@ -224,7 +224,7 @@ on trust. `pnpm verify:receipt` does exactly that.
 
 ```bash
 pnpm install
-pnpm dev            # http://localhost:3000
+pnpm dev            # http://localhost:3210
 ```
 
 Then open it in a browser that speaks WebMCP:

@@ -2,7 +2,7 @@
 /**
  * Drives the real page in real Chrome and asserts the live WebMCP surface.
  *
- *   pnpm test:webmcp                                    # against http://localhost:3000
+ *   pnpm test:webmcp                                    # against http://localhost:3210
  *   pnpm test:webmcp -- https://rotaproof.vercel.app
  *   HEADLESS=1 pnpm test:webmcp
  *
@@ -40,7 +40,7 @@ const CHROME_PATH =
  */
 const WEBMCP_ARGS = ['--enable-features=WebMCP', '--enable-blink-features=WebMCP'];
 
-const BASE = (process.argv[2] || 'http://localhost:3000').replace(/\/$/, '');
+const BASE = (process.argv[2] || process.env.ROTAPROOF_URL || 'http://localhost:3210').replace(/\/$/, '');
 const HEADLESS = process.env.HEADLESS === '1';
 
 const results = [];

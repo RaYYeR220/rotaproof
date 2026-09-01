@@ -23,8 +23,8 @@ Deterministic, no model, no API key — this is the one that belongs in CI:
 
 ```bash
 pnpm dev            # or: pnpm start, after pnpm build
-npx webmcp-evals smoke -u "http://localhost:3000/?reset=1" -e evals/manager.json -v --chrome-channel chrome
-npx webmcp-evals smoke -u "http://localhost:3000/staff?reset=1" -e evals/staff.json -v --chrome-channel chrome
+npx webmcp-evals smoke -u "http://localhost:3210/?reset=1" -e evals/manager.json -v --chrome-channel chrome
+npx webmcp-evals smoke -u "http://localhost:3210/staff?reset=1" -e evals/staff.json -v --chrome-channel chrome
 ```
 
 `?reset=1` matters. The roster is kept in IndexedDB so a manager can close the tab and come
@@ -38,7 +38,7 @@ and cannot tell you whether a model would have picked them.
 With a real model, which is what actually measures tool selection:
 
 ```bash
-npx webmcp-evals browser -u http://localhost:3000/ -e evals/manager.json --chrome-channel chrome
+npx webmcp-evals browser -u http://localhost:3210/ -e evals/manager.json --chrome-channel chrome
 ```
 
 Chrome needs WebMCP switched on either way:

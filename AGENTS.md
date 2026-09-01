@@ -82,7 +82,7 @@ These were measured against Chrome 151, not read from documentation.
 
 ```bash
 pnpm install
-pnpm dev                # http://localhost:3000
+pnpm dev                # http://localhost:3210
 pnpm check              # types, tests, receipts — run this before you push
 pnpm test:webmcp        # real Chrome, real tool surface
 pnpm evals              # deterministic eval smoke, no model or API key

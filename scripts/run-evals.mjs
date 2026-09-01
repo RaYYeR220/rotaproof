@@ -23,7 +23,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 const args = process.argv.slice(2);
 const urlIndex = args.indexOf('--url');
-const base = (urlIndex >= 0 ? args[urlIndex + 1] : 'http://localhost:3000').replace(/\/$/, '');
+const base = (urlIndex >= 0 ? args[urlIndex + 1] : process.env.ROTAPROOF_URL || 'http://localhost:3210').replace(/\/$/, '');
 
 const SUITES = [
   { name: 'manager', file: 'evals/manager.json', path: '/?reset=1' },
